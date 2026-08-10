@@ -1,3 +1,28 @@
+/* Design tokens — docs/Mafali_CRM_Design_System_v1.md ("navy and teal").
+   Defined once here as CSS custom properties; every component (including
+   Blazor's scoped .razor.css files) can reference them via var(--name). */
+:root {
+    --navy: #0b2340;
+    --navy-border: #2a4568;
+    --teal: #14b8a6;
+    --teal-hover: #0f9a8a;
+    --teal-active: #0c8072;
+    --header-bg: #f0f6fb;
+    --header-text: #4a6178;
+    --row-hover: #f0faf8;
+    --row-selected: #e0f5f1;
+    --border-light: #dbe6f0;
+    --border-lighter: #eef3f8;
+    --text-body: #1a2b3d;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    color: var(--text-body);
+}
+
 h1:focus {
     outline: none;
 }

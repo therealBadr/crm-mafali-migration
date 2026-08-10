@@ -1,9 +1,30 @@
 ﻿@inherits LayoutComponentBase
 
-@Body
+<div class="app-shell">
+    <header class="topbar">
+        <span class="brand">Mafali CRM</span>
+        <nav class="nav-links">
+            @foreach (var item in NavItems)
+            {
+                <NavLink href="@item.Href" class="nav-link" ActiveClass="nav-link-active">
+                    @item.Label
+                </NavLink>
+            }
+        </nav>
+    </header>
+    <main class="app-body">
+        @Body
+    </main>
+</div>
 
 <div id="blazor-error-ui">
     An unhandled error has occurred.
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+@code {
+    // Pages register themselves here as we build them — starting with
+    // Familles next. No central route table elsewhere to keep in sync.
+    private readonly List<(string Href, string Label)> NavItems = new();
+}
