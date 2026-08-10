@@ -1,0 +1,16 @@
+Admin -> tous les filtres + creer filtres
+assistant -> Tout les filtres
+Commercial -> filtre a son nom, sans creation de fitre
+
+
+=============
+	Tous filtre | Filtres nom | Creer Filtres
+Admin	|	X	X		X
+Assitant	X	X		Non
+Commer  |	Non	X		Non
+
+
+=============
+
+v2:
+CA + cleitool

@@ -1,0 +1,17 @@
+# Claude Code project instructions / session log — not part of the app
+CLAUDE.md
+PROGRESS.md
+
+# Archived previous stack attempts — kept locally for reference, not in git
+archive/
+
+# .NET build output
+bin/
+obj/
+
+# .NET / Visual Studio extras
+*.user
+.vs/
+
+# OS cruft
+.DS_Store
