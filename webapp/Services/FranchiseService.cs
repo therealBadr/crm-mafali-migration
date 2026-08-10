@@ -28,10 +28,11 @@ public class FranchiseService
         await SaveOrThrowFriendly();
     }
 
-    // NomFranchise is referenced by FOUR tracked relationships (franchise,
-    // franchise2, franchise3, franchise4 on FranceOptique), not just one like
-    // TypeFamille — same restriction applies, ExecuteUpdateAsync from the
-    // start this time instead of hitting the change-tracker error again.
+    // Same change-tracker restriction as TypeFamille.NomFamille: EF Core
+    // never allows mutating a primary key property via a tracked entity,
+    // regardless of relationships (confirmed unconditional after hitting
+    // the same error again on the zero-relationship Assistante entity).
+    // ExecuteUpdateAsync from the start here rather than re-discovering it.
     public async Task RenameAsync(string currentName, string newName)
     {
         int affected;

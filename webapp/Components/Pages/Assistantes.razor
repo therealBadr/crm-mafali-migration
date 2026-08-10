@@ -1,0 +1,223 @@
+@page "/assistantes"
+@inject AssistanteService AssistanteSvc
+@inject IJSRuntime JS
+
+<PageTitle>Assistantes</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Table des Assistantes</span>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="OpenCreate">Nouveau</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="HandleDelete">Supprimer</button>
+    </div>
+</div>
+
+<div class="search-bar">
+    <input class="search-input" type="text" placeholder="Rechercher…" value="@SearchTerm" @oninput="OnSearchInput" />
+    @if (!string.IsNullOrWhiteSpace(SearchTerm))
+    {
+        <span class="result-count">@Filtered.Count / @Items.Count résultats</span>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="table-wrap">
+        <div class="header-row">
+            <div class="cell">Prénom Nom</div>
+            <div class="cell">Service</div>
+            <div class="cell" style="flex: 0 0 160px;">Accès à tous les Filtres</div>
+            <div class="cell">Commentaire</div>
+        </div>
+        @foreach (var a in Filtered)
+        {
+            <div class="row @(a.PrenomNom == Selected ? "selected" : "")" @onclick="() => Select(a.PrenomNom)">
+                <div class="cell">@a.PrenomNom</div>
+                <div class="cell">@a.Service</div>
+                <div class="cell" style="flex: 0 0 160px;">
+                    <span class="badge @(a.AllFiltres ? "badge-teal" : "badge-gray")">@(a.AllFiltres ? "Oui" : "Non")</span>
+                </div>
+                <div class="cell">@a.Commentaire</div>
+            </div>
+        }
+    </div>
+    <p class="count">@Items.Count enregistrements</p>
+}
+</div>
+
+@if (ModalOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>@(IsEditMode ? "Modifier" : "Nouveau")</h3>
+            <label for="a-prenom-nom">Prénom Nom</label>
+            <input id="a-prenom-nom" class="text-input" maxlength="100" value="@FormPrenomNom"
+                   @oninput="e => FormPrenomNom = e.Value?.ToString() ?? string.Empty" />
+            <label for="a-service">Service</label>
+            <input id="a-service" class="text-input" maxlength="30" value="@FormService"
+                   @oninput="e => FormService = e.Value?.ToString() ?? string.Empty" />
+            <label class="checkbox-label">
+                <input type="checkbox" @bind="FormAllFiltres" />
+                Accès à tous les Filtres
+            </label>
+            <label for="a-commentaire">Commentaire</label>
+            <input id="a-commentaire" class="text-input" maxlength="50" value="@FormCommentaire"
+                   @oninput="e => FormCommentaire = e.Value?.ToString() ?? string.Empty" />
+            @if (ModalError is not null)
+            {
+                <div class="alert">@ModalError</div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="CloseModal">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="SubmitModal">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Assistante> Items = new();
+    private string? Selected;
+    private string SearchTerm = string.Empty;
+    private bool Loading = true;
+    private string? Error;
+
+    private bool ModalOpen;
+    private bool IsEditMode;
+    private string EditingPrenomNom = string.Empty;
+    private string FormPrenomNom = string.Empty;
+    private string FormService = string.Empty;
+    private bool FormAllFiltres;
+    private string FormCommentaire = string.Empty;
+    private string? ModalError;
+    private bool Submitting;
+
+    private List<Assistante> Filtered =>
+        string.IsNullOrWhiteSpace(SearchTerm)
+            ? Items
+            : Items.Where(a =>
+                a.PrenomNom.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (a.Service ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (a.Commentaire ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase))
+              .ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Loading = true;
+        Selected = null;
+        try
+        {
+            Items = await AssistanteSvc.ListAsync();
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        SearchTerm = e.Value?.ToString() ?? string.Empty;
+        Selected = null;
+    }
+
+    private void Select(string prenomNom) => Selected = prenomNom;
+
+    private void OpenCreate()
+    {
+        IsEditMode = false;
+        FormPrenomNom = string.Empty;
+        FormService = string.Empty;
+        FormAllFiltres = false;
+        FormCommentaire = string.Empty;
+        ModalError = null;
+        ModalOpen = true;
+    }
+
+    private void OpenEdit()
+    {
+        var current = Items.FirstOrDefault(a => a.PrenomNom == Selected);
+        if (current is null) return;
+        IsEditMode = true;
+        EditingPrenomNom = current.PrenomNom;
+        FormPrenomNom = current.PrenomNom;
+        FormService = current.Service ?? string.Empty;
+        FormAllFiltres = current.AllFiltres;
+        FormCommentaire = current.Commentaire ?? string.Empty;
+        ModalError = null;
+        ModalOpen = true;
+    }
+
+    private void CloseModal() => ModalOpen = false;
+
+    private async Task SubmitModal()
+    {
+        var trimmed = FormPrenomNom.Trim();
+        if (trimmed.Length == 0)
+        {
+            ModalError = "Ce champ est requis.";
+            return;
+        }
+
+        Submitting = true;
+        ModalError = null;
+        var service = string.IsNullOrWhiteSpace(FormService) ? null : FormService.Trim();
+        var commentaire = string.IsNullOrWhiteSpace(FormCommentaire) ? null : FormCommentaire.Trim();
+        try
+        {
+            if (IsEditMode)
+            {
+                await AssistanteSvc.UpdateAsync(EditingPrenomNom, trimmed, service, FormAllFiltres, commentaire);
+            }
+            else
+            {
+                await AssistanteSvc.CreateAsync(trimmed, service, FormAllFiltres, commentaire);
+            }
+            ModalOpen = false;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            ModalError = ex.Message;
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (Selected is null) return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Êtes-vous sûr de vouloir supprimer cette assistante ?");
+        if (!confirmed) return;
+
+        try
+        {
+            await AssistanteSvc.DeleteAsync(Selected);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+}

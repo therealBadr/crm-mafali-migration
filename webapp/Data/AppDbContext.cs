@@ -24,7 +24,7 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<Historique> Historiques { get; set; }
 
-    public virtual DbSet<Pay> Pays { get; set; }
+    public virtual DbSet<Pays> Pays { get; set; }
 
     public virtual DbSet<TypeFamille> TypeFamilles { get; set; }
 
@@ -309,7 +309,7 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_historique_num_client");
         });
 
-        modelBuilder.Entity<Pay>(entity =>
+        modelBuilder.Entity<Pays>(entity =>
         {
             entity.HasKey(e => e.IdPays).HasName("pays_pkey");
 

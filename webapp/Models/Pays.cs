@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace MafaliCrm.Web.Models;
 
-public partial class Pay
+public partial class Pays
 {
     public long IdPays { get; set; }
 

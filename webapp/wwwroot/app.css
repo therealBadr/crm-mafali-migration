@@ -299,3 +299,30 @@ h1:focus {
     gap: 8px;
     margin-top: 6px;
 }
+
+.badge {
+    display: inline-block;
+    border-radius: 10px;
+    font-size: 11px;
+    padding: 2px 8px;
+}
+
+.badge-teal {
+    background: #d6f5ef;
+    color: #0f6e56;
+}
+
+.badge-gray {
+    background: #eef0f3;
+    color: #556;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-body);
+    margin-bottom: 10px;
+    cursor: pointer;
+}

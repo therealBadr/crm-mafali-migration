@@ -14,6 +14,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<FamilleService>();
 builder.Services.AddScoped<FranchiseService>();
+builder.Services.AddScoped<PaysService>();
+builder.Services.AddScoped<AssistanteService>();
 
 var app = builder.Build();
 

@@ -1,0 +1,211 @@
+@page "/pays"
+@using PaysModel = MafaliCrm.Web.Models.Pays
+@inject PaysService PaysSvc
+@inject IJSRuntime JS
+
+<PageTitle>Pays</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Liste Pays</span>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="OpenCreate">Nouveau</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="HandleDelete">Supprimer</button>
+    </div>
+</div>
+
+<div class="search-bar">
+    <input class="search-input" type="text" placeholder="Rechercher…" value="@SearchTerm" @oninput="OnSearchInput" />
+    @if (!string.IsNullOrWhiteSpace(SearchTerm))
+    {
+        <span class="result-count">@Filtered.Count / @Items.Count résultats</span>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="table-wrap">
+        <div class="header-row">
+            <div class="cell" style="flex: 0 0 70px;">Identifiant</div>
+            <div class="cell">Nom Pays</div>
+            <div class="cell">Indicatif</div>
+            <div class="cell">Masque N° Téléphone</div>
+        </div>
+        @foreach (var p in Filtered)
+        {
+            <div class="row @(p.IdPays == Selected ? "selected" : "")" @onclick="() => Select(p.IdPays)">
+                <div class="cell" style="flex: 0 0 70px;">@p.IdPays</div>
+                <div class="cell">@p.NomPays</div>
+                <div class="cell">@p.Indicatif</div>
+                <div class="cell">@p.Masque</div>
+            </div>
+        }
+    </div>
+    <p class="count">@Items.Count enregistrements</p>
+}
+</div>
+
+@if (ModalOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>@(IsEditMode ? "Modifier" : "Nouveau")</h3>
+            <label for="pays-nom">Nom Pays</label>
+            <input id="pays-nom" class="text-input" maxlength="50" value="@FormNomPays"
+                   @oninput="e => FormNomPays = e.Value?.ToString() ?? string.Empty" />
+            <label for="pays-indicatif">Indicatif</label>
+            <input id="pays-indicatif" class="text-input" maxlength="50" value="@FormIndicatif"
+                   @oninput="e => FormIndicatif = e.Value?.ToString() ?? string.Empty" />
+            <label for="pays-masque">Masque N° Téléphone</label>
+            <input id="pays-masque" class="text-input" maxlength="50" value="@FormMasque"
+                   @oninput="e => FormMasque = e.Value?.ToString() ?? string.Empty" />
+            @if (ModalError is not null)
+            {
+                <div class="alert">@ModalError</div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="CloseModal">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="SubmitModal">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PaysModel> Items = new();
+    private long? Selected;
+    private string SearchTerm = string.Empty;
+    private bool Loading = true;
+    private string? Error;
+
+    private bool ModalOpen;
+    private bool IsEditMode;
+    private long EditingId;
+    private string FormNomPays = string.Empty;
+    private string FormIndicatif = string.Empty;
+    private string FormMasque = string.Empty;
+    private string? ModalError;
+    private bool Submitting;
+
+    private List<PaysModel> Filtered =>
+        string.IsNullOrWhiteSpace(SearchTerm)
+            ? Items
+            : Items.Where(p => p.NomPays.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Loading = true;
+        Selected = null;
+        try
+        {
+            Items = await PaysSvc.ListAsync();
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        SearchTerm = e.Value?.ToString() ?? string.Empty;
+        Selected = null;
+    }
+
+    private void Select(long idPays) => Selected = idPays;
+
+    private void OpenCreate()
+    {
+        IsEditMode = false;
+        FormNomPays = string.Empty;
+        FormIndicatif = string.Empty;
+        FormMasque = string.Empty;
+        ModalError = null;
+        ModalOpen = true;
+    }
+
+    private void OpenEdit()
+    {
+        var current = Items.FirstOrDefault(p => p.IdPays == Selected);
+        if (current is null) return;
+        IsEditMode = true;
+        EditingId = current.IdPays;
+        FormNomPays = current.NomPays;
+        FormIndicatif = current.Indicatif ?? string.Empty;
+        FormMasque = current.Masque ?? string.Empty;
+        ModalError = null;
+        ModalOpen = true;
+    }
+
+    private void CloseModal() => ModalOpen = false;
+
+    private async Task SubmitModal()
+    {
+        var trimmed = FormNomPays.Trim();
+        if (trimmed.Length == 0)
+        {
+            ModalError = "Ce champ est requis.";
+            return;
+        }
+
+        Submitting = true;
+        ModalError = null;
+        var indicatif = string.IsNullOrWhiteSpace(FormIndicatif) ? null : FormIndicatif.Trim();
+        var masque = string.IsNullOrWhiteSpace(FormMasque) ? null : FormMasque.Trim();
+        try
+        {
+            if (IsEditMode)
+            {
+                await PaysSvc.UpdateAsync(EditingId, trimmed, indicatif, masque);
+            }
+            else
+            {
+                await PaysSvc.CreateAsync(trimmed, indicatif, masque);
+            }
+            ModalOpen = false;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            ModalError = ex.Message;
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (Selected is null) return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Êtes-vous sûr de vouloir supprimer ce pays ?");
+        if (!confirmed) return;
+
+        try
+        {
+            await PaysSvc.DeleteAsync(Selected.Value);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+}

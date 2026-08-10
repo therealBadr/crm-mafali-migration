@@ -91,5 +91,5 @@ public partial class FranceOptique
 
     public virtual ICollection<Historique> Historiques { get; set; } = new List<Historique>();
 
-    public virtual Pay? PaysNavigation { get; set; }
+    public virtual Pays? PaysNavigation { get; set; }
 }

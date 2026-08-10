@@ -36,8 +36,11 @@ public class FamilleService
     //
     // NOTE: this can't be "load the entity, mutate NomFamille, SaveChanges" —
     // confirmed by actually hitting it — because EF Core's change tracker
-    // refuses to let you modify a key property that participates in a
-    // tracked relationship (TypeFamille has a FranceOptiques collection).
+    // never allows mutating a primary key property that way, full stop.
+    // (Originally assumed this was specifically about TypeFamille's tracked
+    // FranceOptiques relationship — later disproven by hitting the exact
+    // same error on Assistante, which has zero relationships. The rule is
+    // simpler and unconditional: key properties, period.)
     // ExecuteUpdateAsync issues a direct SQL UPDATE instead, bypassing the
     // change tracker (and its relationship-consistency concerns) entirely.
     public async Task RenameAsync(string currentName, string newName)
