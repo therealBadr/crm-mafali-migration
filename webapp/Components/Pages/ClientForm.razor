@@ -1,0 +1,181 @@
+@page "/clients/new"
+@page "/clients/{CleOpl:long}/edit"
+@inject ClientService ClientSvc
+@inject PaysService PaysSvc
+@inject NavigationManager Nav
+
+<PageTitle>@(IsEditMode ? "Modifier Client" : "Nouveau Client")</PageTitle>
+
+<div class="form-page">
+    <h2 class="form-page-title">Mafali CRM</h2>
+    <h3 class="form-page-subtitle">@(IsEditMode ? "Modifier Client" : "Nouveau Client")</h3>
+
+    @if (Loading)
+    {
+        <p class="dimmed">Chargement…</p>
+    }
+    else
+    {
+        <div class="form-grid">
+            <label for="f-raison">Raison Sociale *</label>
+            <input id="f-raison" class="text-input" maxlength="60" value="@Input.RaisonSociale"
+                   @oninput="e => Input.RaisonSociale = e.Value?.ToString() ?? string.Empty" />
+
+            <label for="f-complement">Complement</label>
+            <input id="f-complement" class="text-input" maxlength="60" value="@Input.Complement"
+                   @oninput="e => Input.Complement = e.Value?.ToString()" />
+
+            <label for="f-rue">Rue</label>
+            <input id="f-rue" class="text-input" maxlength="60" value="@Input.Rue"
+                   @oninput="e => Input.Rue = e.Value?.ToString()" />
+
+            <label for="f-loc1">Localisation 1</label>
+            <input id="f-loc1" class="text-input" maxlength="60" value="@Input.Localisation1"
+                   @oninput="e => Input.Localisation1 = e.Value?.ToString()" />
+
+            <label for="f-loc2">Localisation 2</label>
+            <input id="f-loc2" class="text-input" maxlength="60" value="@Input.Localisation2"
+                   @oninput="e => Input.Localisation2 = e.Value?.ToString()" />
+
+            <label for="f-cp">Code Postal</label>
+            <input id="f-cp" class="text-input" maxlength="5" value="@Input.Cp"
+                   @oninput="e => Input.Cp = e.Value?.ToString()" />
+
+            <label for="f-ville">Ville</label>
+            <input id="f-ville" class="text-input" maxlength="40" value="@Input.Ville"
+                   @oninput="e => Input.Ville = e.Value?.ToString()" />
+
+            <label for="f-pays">Pays</label>
+            <select id="f-pays" class="text-input" value="@Input.Pays" @onchange="e => Input.Pays = e.Value?.ToString()">
+                <option value="">—</option>
+                @foreach (var p in PaysOptions)
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+
+            <label for="f-tel">Telephone</label>
+            <input id="f-tel" class="text-input" maxlength="20" value="@Input.Telephone"
+                   @oninput="e => Input.Telephone = e.Value?.ToString()" />
+
+            <label for="f-portable">Portable</label>
+            <input id="f-portable" class="text-input" maxlength="20" value="@Input.Portable"
+                   @oninput="e => Input.Portable = e.Value?.ToString()" />
+
+            <label for="f-fax">Fax</label>
+            <input id="f-fax" class="text-input" maxlength="20" value="@Input.Fax"
+                   @oninput="e => Input.Fax = e.Value?.ToString()" />
+
+            <label for="f-email">Email</label>
+            <input id="f-email" class="text-input" type="email" maxlength="50" value="@Input.Email"
+                   @oninput="e => Input.Email = e.Value?.ToString()" />
+
+            <label for="f-resp">Responsable Achat</label>
+            <input id="f-resp" class="text-input" maxlength="50" value="@Input.ResponsableAchat"
+                   @oninput="e => Input.ResponsableAchat = e.Value?.ToString()" />
+
+            <label for="f-repr">Représentant</label>
+            <input id="f-repr" class="text-input" maxlength="100" value="@Input.Representant"
+                   @oninput="e => Input.Representant = e.Value?.ToString()" />
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert">@Error</div>
+        }
+
+        <div class="modal-actions">
+            <button class="btn btn-default" @onclick="Cancel">Annuler</button>
+            <button class="btn btn-primary" disabled="@Submitting" @onclick="Submit">Enregistrer</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long? CleOpl { get; set; }
+
+    private bool IsEditMode => CleOpl is not null;
+    private bool Loading = true;
+    private bool Submitting;
+    private string? Error;
+    private ClientInput Input = new();
+    private List<string> PaysOptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loading = true;
+        try
+        {
+            PaysOptions = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
+
+            if (IsEditMode)
+            {
+                var existing = await ClientSvc.GetAsync(CleOpl!.Value);
+                if (existing is null)
+                {
+                    Error = "Client introuvable.";
+                    return;
+                }
+                Input = new ClientInput
+                {
+                    RaisonSociale = existing.RaisonSociale ?? string.Empty,
+                    Complement = existing.Complement,
+                    Rue = existing.Rue,
+                    Localisation1 = existing.Localisation1,
+                    Localisation2 = existing.Localisation2,
+                    Cp = existing.Cp,
+                    Ville = existing.Ville,
+                    Pays = existing.Pays,
+                    Telephone = existing.Telephone,
+                    Portable = existing.Portable,
+                    Fax = existing.Fax,
+                    Email = existing.Email,
+                    ResponsableAchat = existing.ResponsableAchat,
+                    Representant = existing.Representant,
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void Cancel() => Nav.NavigateTo("/clients");
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Input.RaisonSociale))
+        {
+            Error = "Raison Sociale est requis.";
+            return;
+        }
+
+        Submitting = true;
+        Error = null;
+        try
+        {
+            if (IsEditMode)
+            {
+                await ClientSvc.UpdateAsync(CleOpl!.Value, Input);
+            }
+            else
+            {
+                await ClientSvc.CreateAsync(Input);
+            }
+            Nav.NavigateTo("/clients");
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+}

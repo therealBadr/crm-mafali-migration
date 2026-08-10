@@ -5,18 +5,23 @@ using Npgsql;
 
 namespace MafaliCrm.Web.Services;
 
+// IDbContextFactory, not an injected AppDbContext — see ClientService for
+// why: a scoped AppDbContext lives for the whole Blazor Server session, not
+// one request, so stale tracked state from a failed operation can corrupt a
+// later unrelated one. A fresh context per method call avoids that.
 public class FranchiseService
 {
-    private readonly AppDbContext _db;
+    private readonly IDbContextFactory<AppDbContext> _dbFactory;
 
-    public FranchiseService(AppDbContext db)
+    public FranchiseService(IDbContextFactory<AppDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public async Task<List<string>> ListAsync()
     {
-        return await _db.TypeFranchises
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.TypeFranchises
             .OrderBy(f => f.NomFranchise)
             .Select(f => f.NomFranchise)
             .ToListAsync();
@@ -24,8 +29,9 @@ public class FranchiseService
 
     public async Task CreateAsync(string nomFranchise)
     {
-        _db.TypeFranchises.Add(new TypeFranchise { NomFranchise = nomFranchise });
-        await SaveOrThrowFriendly();
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        db.TypeFranchises.Add(new TypeFranchise { NomFranchise = nomFranchise });
+        await SaveOrThrowFriendly(db);
     }
 
     // Same change-tracker restriction as TypeFamille.NomFamille: EF Core
@@ -35,10 +41,11 @@ public class FranchiseService
     // ExecuteUpdateAsync from the start here rather than re-discovering it.
     public async Task RenameAsync(string currentName, string newName)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         int affected;
         try
         {
-            affected = await _db.TypeFranchises
+            affected = await db.TypeFranchises
                 .Where(f => f.NomFranchise == currentName)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(f => f.NomFranchise, newName));
         }
@@ -55,17 +62,18 @@ public class FranchiseService
 
     public async Task DeleteAsync(string nomFranchise)
     {
-        var entity = await _db.TypeFranchises.FindAsync(nomFranchise);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var entity = await db.TypeFranchises.FindAsync(nomFranchise);
         if (entity is null) return;
-        _db.TypeFranchises.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.TypeFranchises.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
-    private async Task SaveOrThrowFriendly()
+    private static async Task SaveOrThrowFriendly(AppDbContext db)
     {
         try
         {
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
         }
         catch (Exception ex) when (IsUniqueViolation(ex))
         {

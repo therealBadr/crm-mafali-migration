@@ -55,7 +55,11 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    /* auto, not hidden: grid pages (.page) fill this exactly and manage
+       their own internal scroll, so this never triggers for them — but
+       plain content pages like the client form, with no such internal
+       split, need the parent to allow scrolling when content overflows. */
+    overflow-y: auto;
 }
 
 #blazor-error-ui {

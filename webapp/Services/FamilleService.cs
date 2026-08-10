@@ -5,18 +5,24 @@ using Npgsql;
 
 namespace MafaliCrm.Web.Services;
 
+// Uses IDbContextFactory, not an injected AppDbContext — see ClientService
+// for the full story of why: a scoped AppDbContext lives for the entire
+// Blazor Server session, not one request, so a failed SaveChanges anywhere
+// in that session can leave stale tracked state that corrupts a later,
+// unrelated operation. A fresh context per method call avoids that.
 public class FamilleService
 {
-    private readonly AppDbContext _db;
+    private readonly IDbContextFactory<AppDbContext> _dbFactory;
 
-    public FamilleService(AppDbContext db)
+    public FamilleService(IDbContextFactory<AppDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public async Task<List<string>> ListAsync()
     {
-        return await _db.TypeFamilles
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.TypeFamilles
             .OrderBy(f => f.NomFamille)
             .Select(f => f.NomFamille)
             .ToListAsync();
@@ -24,8 +30,9 @@ public class FamilleService
 
     public async Task CreateAsync(string nomFamille)
     {
-        _db.TypeFamilles.Add(new TypeFamille { NomFamille = nomFamille });
-        await SaveOrThrowFriendly();
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        db.TypeFamilles.Add(new TypeFamille { NomFamille = nomFamille });
+        await SaveOrThrowFriendly(db);
     }
 
     // fk_france_optique_famille is ON UPDATE CASCADE, so renaming here
@@ -45,10 +52,11 @@ public class FamilleService
     // change tracker (and its relationship-consistency concerns) entirely.
     public async Task RenameAsync(string currentName, string newName)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         int affected;
         try
         {
-            affected = await _db.TypeFamilles
+            affected = await db.TypeFamilles
                 .Where(f => f.NomFamille == currentName)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(f => f.NomFamille, newName));
         }
@@ -68,17 +76,18 @@ public class FamilleService
     // on any client that referenced it, no blocking, no extra handling.
     public async Task DeleteAsync(string nomFamille)
     {
-        var entity = await _db.TypeFamilles.FindAsync(nomFamille);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var entity = await db.TypeFamilles.FindAsync(nomFamille);
         if (entity is null) return;
-        _db.TypeFamilles.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.TypeFamilles.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
-    private async Task SaveOrThrowFriendly()
+    private static async Task SaveOrThrowFriendly(AppDbContext db)
     {
         try
         {
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
         }
         catch (Exception ex) when (IsUniqueViolation(ex))
         {

@@ -15,34 +15,42 @@ namespace MafaliCrm.Web.Services;
 // real trigger — see AssistanteService for how that got disproven).
 // ExecuteUpdateAsync is used for the whole update, not just NomPays, to
 // keep the write path uniform rather than conditional.
+//
+// Also uses IDbContextFactory, not an injected AppDbContext — see
+// ClientService for why: a scoped AppDbContext lives for the whole Blazor
+// Server session, so stale tracked state from a failed operation can
+// corrupt a later unrelated one. A fresh context per method call avoids it.
 public class PaysService
 {
-    private readonly AppDbContext _db;
+    private readonly IDbContextFactory<AppDbContext> _dbFactory;
 
-    public PaysService(AppDbContext db)
+    public PaysService(IDbContextFactory<AppDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public async Task<List<Pays>> ListAsync()
     {
-        return await _db.Pays
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        return await db.Pays
             .OrderBy(p => p.NomPays)
             .ToListAsync();
     }
 
     public async Task CreateAsync(string nomPays, string? indicatif, string? masque)
     {
-        _db.Pays.Add(new Pays { NomPays = nomPays, Indicatif = indicatif, Masque = masque });
-        await SaveOrThrowFriendly();
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        db.Pays.Add(new Pays { NomPays = nomPays, Indicatif = indicatif, Masque = masque });
+        await SaveOrThrowFriendly(db);
     }
 
     public async Task UpdateAsync(long idPays, string nomPays, string? indicatif, string? masque)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         int affected;
         try
         {
-            affected = await _db.Pays
+            affected = await db.Pays
                 .Where(p => p.IdPays == idPays)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(p => p.NomPays, nomPays)
@@ -62,17 +70,18 @@ public class PaysService
 
     public async Task DeleteAsync(long idPays)
     {
-        var entity = await _db.Pays.FindAsync(idPays);
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var entity = await db.Pays.FindAsync(idPays);
         if (entity is null) return;
-        _db.Pays.Remove(entity);
-        await _db.SaveChangesAsync();
+        db.Pays.Remove(entity);
+        await db.SaveChangesAsync();
     }
 
-    private async Task SaveOrThrowFriendly()
+    private static async Task SaveOrThrowFriendly(AppDbContext db)
     {
         try
         {
-            await _db.SaveChangesAsync();
+            await db.SaveChangesAsync();
         }
         catch (Exception ex) when (IsUniqueViolation(ex))
         {

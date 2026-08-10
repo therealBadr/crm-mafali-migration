@@ -326,3 +326,43 @@ h1:focus {
     margin-bottom: 10px;
     cursor: pointer;
 }
+
+/* Standalone form pages (Clients create/edit) — a different layout shape
+   from the toolbar+grid pattern, a centered card instead. */
+.form-page {
+    max-width: 640px;
+    margin: 40px auto;
+    padding: 24px 28px;
+    background: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(11, 35, 64, 0.08);
+}
+
+.form-page-title {
+    margin: 0 0 2px;
+    font-size: 18px;
+    color: var(--navy);
+}
+
+.form-page-subtitle {
+    margin: 0 0 20px;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--header-text);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 10px 12px;
+    align-items: center;
+}
+
+.form-grid label {
+    font-size: 13px;
+    color: var(--header-text);
+}
+
+.form-grid .text-input {
+    margin-bottom: 0;
+}

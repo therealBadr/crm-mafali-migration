@@ -175,6 +175,7 @@ else
         var confirmed = await JS.InvokeAsync<bool>("confirm", "Êtes-vous sûr de vouloir supprimer cette famille ?");
         if (!confirmed) return;
 
+        Error = null;
         try
         {
             await FamilleSvc.DeleteAsync(Selected);

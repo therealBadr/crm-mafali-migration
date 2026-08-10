@@ -198,6 +198,7 @@ else
         var confirmed = await JS.InvokeAsync<bool>("confirm", "Êtes-vous sûr de vouloir supprimer ce pays ?");
         if (!confirmed) return;
 
+        Error = null;
         try
         {
             await PaysSvc.DeleteAsync(Selected.Value);
