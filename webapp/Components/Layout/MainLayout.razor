@@ -24,7 +24,11 @@
 </div>
 
 @code {
-    // Pages register themselves here as we build them — starting with
-    // Familles next. No central route table elsewhere to keep in sync.
-    private readonly List<(string Href, string Label)> NavItems = new();
+    // Pages register themselves here as we build them. No central route
+    // table elsewhere to keep in sync — Familles.razor's own @page "/familles"
+    // is what actually makes the route work; this list is just the nav UI.
+    private readonly List<(string Href, string Label)> NavItems = new()
+    {
+        ("/familles", "Fichier des Familles"),
+    };
 }

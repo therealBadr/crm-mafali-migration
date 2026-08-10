@@ -1,5 +1,6 @@
 using MafaliCrm.Web.Components;
 using MafaliCrm.Web.Data;
+using MafaliCrm.Web.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,6 +11,8 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
+builder.Services.AddScoped<FamilleService>();
 
 var app = builder.Build();
 

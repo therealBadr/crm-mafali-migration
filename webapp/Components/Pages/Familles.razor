@@ -1,0 +1,188 @@
+@page "/"
+@page "/familles"
+@inject FamilleService FamilleSvc
+@inject IJSRuntime JS
+
+<PageTitle>Familles</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Table des Familles</span>
+    <div class="actions">
+        <button class="btn btn-primary" @onclick="OpenCreate">Nouveau</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="HandleDelete">Supprimer</button>
+    </div>
+</div>
+
+<div class="search-bar">
+    <input class="search-input" type="text" placeholder="Rechercher…" value="@SearchTerm" @oninput="OnSearchInput" />
+    @if (!string.IsNullOrWhiteSpace(SearchTerm))
+    {
+        <span class="result-count">@Filtered.Count / @Names.Count résultats</span>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="table-wrap">
+        <div class="header-row">
+            <div class="cell">Nom de la Famille</div>
+        </div>
+        @foreach (var name in Filtered)
+        {
+            <div class="row @(name == Selected ? "selected" : "")" @onclick="() => Select(name)">
+                <div class="cell">@name</div>
+            </div>
+        }
+    </div>
+    <p class="count">@Names.Count enregistrements</p>
+}
+</div>
+
+@if (ModalOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>@(IsEditMode ? "Modifier" : "Nouveau")</h3>
+            <label for="famille-name">Nom de la Famille</label>
+            <input id="famille-name" class="text-input" maxlength="30" value="@FormValue"
+                   @oninput="e => FormValue = e.Value?.ToString() ?? string.Empty" />
+            @if (ModalError is not null)
+            {
+                <div class="alert">@ModalError</div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="CloseModal">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="SubmitModal">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<string> Names = new();
+    private string? Selected;
+    private string SearchTerm = string.Empty;
+    private bool Loading = true;
+    private string? Error;
+
+    private bool ModalOpen;
+    private bool IsEditMode;
+    private string FormValue = string.Empty;
+    private string? ModalError;
+    private bool Submitting;
+
+    private List<string> Filtered =>
+        string.IsNullOrWhiteSpace(SearchTerm)
+            ? Names
+            : Names.Where(f => f.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Loading = true;
+        Selected = null;
+        try
+        {
+            Names = await FamilleSvc.ListAsync();
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        SearchTerm = e.Value?.ToString() ?? string.Empty;
+        Selected = null;
+    }
+
+    private void Select(string name) => Selected = name;
+
+    private void OpenCreate()
+    {
+        IsEditMode = false;
+        FormValue = string.Empty;
+        ModalError = null;
+        ModalOpen = true;
+    }
+
+    private void OpenEdit()
+    {
+        if (Selected is null) return;
+        IsEditMode = true;
+        FormValue = Selected;
+        ModalError = null;
+        ModalOpen = true;
+    }
+
+    private void CloseModal() => ModalOpen = false;
+
+    private async Task SubmitModal()
+    {
+        var trimmed = FormValue.Trim();
+        if (trimmed.Length == 0)
+        {
+            ModalError = "Ce champ est requis.";
+            return;
+        }
+
+        Submitting = true;
+        ModalError = null;
+        try
+        {
+            if (IsEditMode)
+            {
+                await FamilleSvc.RenameAsync(Selected!, trimmed);
+            }
+            else
+            {
+                await FamilleSvc.CreateAsync(trimmed);
+            }
+            ModalOpen = false;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            ModalError = ex.Message;
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (Selected is null) return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Êtes-vous sûr de vouloir supprimer cette famille ?");
+        if (!confirmed) return;
+
+        try
+        {
+            await FamilleSvc.DeleteAsync(Selected);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+}
