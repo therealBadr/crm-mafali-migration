@@ -276,6 +276,12 @@ h1:focus {
     color: var(--navy);
 }
 
+.confirm-text {
+    margin: 0 0 18px;
+    font-size: 13px;
+    color: var(--text-body);
+}
+
 .modal label {
     display: block;
     font-size: 12px;

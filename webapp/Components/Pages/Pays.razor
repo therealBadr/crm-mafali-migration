@@ -1,7 +1,6 @@
 @page "/pays"
 @using PaysModel = MafaliCrm.Web.Models.Pays
 @inject PaysService PaysSvc
-@inject IJSRuntime JS
 
 <PageTitle>Pays</PageTitle>
 
@@ -11,7 +10,7 @@
     <div class="actions">
         <button class="btn btn-primary" @onclick="OpenCreate">Nouveau</button>
         <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
-        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="HandleDelete">Supprimer</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenDeleteConfirm">Supprimer</button>
     </div>
 </div>
 
@@ -76,6 +75,20 @@ else
             <div class="modal-actions">
                 <button class="btn btn-default" @onclick="CloseModal">Annuler</button>
                 <button class="btn btn-primary" disabled="@Submitting" @onclick="SubmitModal">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ConfirmDeleteOpen)
+{
+    <div class="modal-backdrop" @onclick="CancelDelete">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Confirmer la suppression</h3>
+            <p class="confirm-text">Êtes-vous sûr de vouloir supprimer ce pays ?</p>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="CancelDelete">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ConfirmDelete">Supprimer</button>
             </div>
         </div>
     </div>
@@ -192,12 +205,20 @@ else
         }
     }
 
-    private async Task HandleDelete()
+    private bool ConfirmDeleteOpen;
+
+    private void OpenDeleteConfirm()
     {
         if (Selected is null) return;
-        var confirmed = await JS.InvokeAsync<bool>("confirm", "Êtes-vous sûr de vouloir supprimer ce pays ?");
-        if (!confirmed) return;
+        ConfirmDeleteOpen = true;
+    }
 
+    private void CancelDelete() => ConfirmDeleteOpen = false;
+
+    private async Task ConfirmDelete()
+    {
+        if (Selected is null) return;
+        ConfirmDeleteOpen = false;
         Error = null;
         try
         {
