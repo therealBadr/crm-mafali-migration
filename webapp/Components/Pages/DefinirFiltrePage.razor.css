@@ -1,0 +1,120 @@
+/* Real <table> layout, not a hand-rolled div/flex/grid "fake table" — this
+   page ran into a genuine, unreproducible-on-this-machine column
+   misalignment that survived a flex rewrite AND a CSS Grid rewrite,
+   both of which independently compute each row's box positions and just
+   *happen* to share an identical column-width string. A real <table>
+   with <colgroup> defines each column's width exactly once, table-wide,
+   and every browser's table layout algorithm is specifically built to
+   keep every row's cells honoring that — this is what tables exist for.
+   Nothing here is styled to *look* like a table; it structurally is one. */
+
+.filter-table {
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.filter-table th,
+.filter-table td {
+    box-sizing: border-box;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-right: 1px solid var(--header-border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.filter-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--header-strong-bg);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--navy);
+    border-bottom: 3px solid var(--teal);
+}
+
+.filter-table tbody tr {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.filter-table tbody tr:nth-child(even) {
+    background: var(--row-alt);
+}
+
+.filter-table tbody tr:hover {
+    background: var(--row-hover);
+}
+
+/* The value-list cells need real content (a dropdown, an input, a remove
+   button) to spill visibly rather than get clipped by the ellipsis rule
+   above, which is only meant for plain single-line label cells. */
+.filter-table td.value-cell {
+    overflow: visible;
+    white-space: normal;
+}
+
+/* + / × as real filled icon buttons, not plain .btn-outline squares that
+   blended into the row background at 26px — Badr's ask. Color carries the
+   meaning: coral (the app's one accent, --teal despite the name — see the
+   2026-08-13 recolor) for the affirmative "add", the shared --danger red
+   for the destructive "remove", same red already used for delete
+   confirmations and error text elsewhere in the app. */
+.value-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    flex-shrink: 0;
+    border-radius: 50%;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+}
+
+.value-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--navy);
+}
+
+.btn-add-value {
+    border: none;
+    background: var(--teal);
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(11, 35, 64, 0.25);
+}
+
+.btn-add-value:hover {
+    background: var(--teal-hover);
+}
+
+.btn-add-value:active {
+    background: var(--teal-active);
+    transform: scale(0.92);
+}
+
+.btn-remove-value {
+    border: 1.5px solid var(--danger);
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.btn-remove-value:hover {
+    background: var(--danger);
+    color: #ffffff;
+}
+
+.btn-remove-value:active {
+    transform: scale(0.92);
+}

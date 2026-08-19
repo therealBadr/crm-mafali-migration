@@ -113,7 +113,7 @@ else
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -174,7 +174,7 @@ else
         }
         catch (Exception ex)
         {
-            ModalError = ex.Message;
+            ModalError = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -204,7 +204,7 @@ else
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
     }
 }

@@ -1,7 +1,6 @@
 using MafaliCrm.Web.Data;
 using MafaliCrm.Web.Models;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace MafaliCrm.Web.Services;
 
@@ -49,7 +48,7 @@ public class FranchiseService
                 .Where(f => f.NomFranchise == currentName)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(f => f.NomFranchise, newName));
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (FriendlyError.IsUniqueViolation(ex))
         {
             throw new InvalidOperationException("Cette franchise existe déjà.");
         }
@@ -75,13 +74,9 @@ public class FranchiseService
         {
             await db.SaveChangesAsync();
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (FriendlyError.IsUniqueViolation(ex))
         {
             throw new InvalidOperationException("Cette franchise existe déjà.");
         }
     }
-
-    private static bool IsUniqueViolation(Exception ex) =>
-        ex is PostgresException { SqlState: "23505" } ||
-        ex.InnerException is PostgresException { SqlState: "23505" };
 }

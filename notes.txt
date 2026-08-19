@@ -14,3 +14,22 @@ Commer  |	Non	X		Non
 
 v2:
 CA + cleitool
+
+
+====
+
+A rajouter: facturation electronique, SIRET, SIREN, facturation electronique
+- Definir filtre: - Add valeur columns (more than 2 fixed)
+		- The fields that we grab from db needs to only allow the existing fields in choice when creating a filter
+		
+- Filtre predefinis:
+	- Fix bottom grid column
+	- Roles for filters
+	- 
+
+- Filtre language:
+	- Use one easy language close to the one in windevi
+
+
+
+colum resize just like excel

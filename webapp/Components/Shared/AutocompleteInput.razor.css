@@ -1,0 +1,36 @@
+.ac-wrap {
+    position: relative;
+}
+
+.ac-wrap .text-input {
+    margin-bottom: 0;
+}
+
+.ac-suggestions {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: #ffffff;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(11, 35, 64, 0.15);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.ac-suggestion {
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-body);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ac-suggestion:hover,
+.ac-suggestion-highlighted {
+    background: var(--row-hover);
+}

@@ -1,0 +1,178 @@
+SYNTAXE DES FILTRES (Filtre_Réel)
+==================================
+
+Ce document explique la syntaxe du texte de filtre stocké dans les
+"Filtres Opératrice" et "Filtres Historique" (le champ Filtre_Réel), tel
+qu'il est réellement interprété par l'application (voir
+webapp/Services/FiltreReelParser.cs). La grammaire ci-dessous a été
+établie à partir des 66 filtres réellement enregistrés dans la base, pas
+inventée à l'avance.
+
+
+1. STRUCTURE GÉNÉRALE
+----------------------
+
+Un filtre est une suite de conditions de la forme :
+
+    CHAMP OPÉRATEUR valeur
+
+reliées entre elles par ET / OU (en français, insensible à la casse :
+"ET", "et", "Et" fonctionnent tous), et regroupées avec des parenthèses
+pour contrôler l'ordre d'évaluation.
+
+Exemple réel :
+
+    (Famille = 'Opticien FRANCE') ET (Telephone LIKE '03%' ou Telephone LIKE '05%')
+
+Ce filtre sélectionne les clients dont la Famille est exactement
+"Opticien FRANCE" ET dont le téléphone commence par 03 OU par 05.
+
+Les parenthèses ne sont pas obligatoires partout, mais elles sont
+fortement recommandées dès qu'on mélange ET et OU dans la même
+expression, pour éviter toute ambiguïté sur l'ordre de priorité.
+
+
+2. LES OPÉRATEURS DISPONIBLES
+-------------------------------
+
+    =           égal à
+    <>          différent de
+    <           inférieur à
+    <=          inférieur ou égal à
+    >           supérieur à
+    >=          supérieur ou égal à
+    LIKE        contient / commence par (voir section 4, jokers)
+    NOT LIKE    ne contient pas / ne commence pas par
+    BETWEEN ... AND ...   compris entre deux valeurs (bornes incluses)
+
+Exemple avec BETWEEN :
+
+    Date_Rappel BETWEEN '20201124' AND '20260724'
+
+
+3. LES CHAMPS DISPONIBLES
+---------------------------
+
+Les champs utilisent leur nom "historique" (issu de l'ancienne
+application), pas le nom de la colonne en base. Ils sont insensibles à
+la casse (FAMILLE, Famille, famille sont équivalents). Liste complète
+utilisable dans un filtre :
+
+    Famille                  Raison_Sociale           Complement
+    Franchise                Franchise2                Franchise3
+    Franchise4                Rue                       Localisation_1
+    Localisation_2            CP                        Ville
+    Pays                      Telephone                 Tel_Bis
+    Portable                  Fax                        Email
+    Assistante_Commerciale    Responsable_Achat          Représentant
+    Op_En_Cours                Status_Vente              Statuts_Clients
+    Etat_Client                Production                Magasin_Principal
+    Date_Saisie                Heure_Saisie              Date_Rappel
+    Heure_Rappel                Note                      Note_Perm
+    Bloque                     Rappel_RDV                Cle_Opl
+
+Un champ qui ne figure pas dans cette liste fait échouer le filtre au
+moment de son exécution (voir section 6).
+
+
+4. LES VALEURS
+----------------
+
+Les valeurs textuelles et les dates s'écrivent toujours entre
+apostrophes ('...'). Il existe un seul mot-clé spécial, à ne PAS mettre
+entre apostrophes :
+
+    SYSDATE     la date du jour — utilisable uniquement sur un champ Date
+
+Exemple :
+
+    Date_Rappel < SYSDATE
+
+Les dates s'écrivent au format AAAAMMJJ, sans séparateur (jamais au
+format JJ/MM/AAAA) :
+
+    Date_Rappel BETWEEN '20201124' AND '20260724'
+
+
+5. LE CARACTÈRE JOKER %
+--------------------------
+
+Le caractère % à l'intérieur d'une valeur est TOUJOURS traité comme un
+joker (comme dans LIKE), même si l'opérateur utilisé est = plutôt que
+LIKE. C'est un comportement réel de l'application, confirmé par l'usage :
+le filtre
+
+    Famille = '%Agence Pub%'
+
+apparaît tel quel (avec = et non LIKE) dans 15 filtres enregistrés par
+quatre opératrices différentes.
+
+Seules deux positions du % sont reconnues :
+
+    'texte%'      -> commence par "texte"
+    '%texte%'     -> contient "texte"
+
+Un % seulement au début ('%texte', sans % final) n'apparaît dans aucun
+filtre réel et n'est pas pris en charge.
+
+NOT LIKE avec un % fonctionne de la même façon, en négatif :
+
+    Op_En_Cours NOT LIKE 'Pas Interesse'
+    Franchise NOT LIKE '%Generale%'
+
+
+6. EN CAS D'ERREUR
+---------------------
+
+Si le texte du filtre ne respecte pas cette grammaire (champ inconnu,
+opérateur non reconnu, parenthèse manquante, etc.), l'application refuse
+de l'exécuter et affiche une erreur au moment de lancer le filtre depuis
+"Filtres Prédéfinis" — mais le filtre reste enregistré tel quel, sans
+modification. Il suffit de corriger le texte (ou de corriger
+l'application si un cas légitime n'est pas encore pris en charge) pour
+que le filtre redevienne utilisable.
+
+
+7. EXEMPLES RÉELS COMMENTÉS
+------------------------------
+
+Exemple 1 :
+
+    (Date_Rappel BETWEEN '20201124' AND '20260724')
+    et (Famille='Opticien FRANCE')
+    ET ( Telephone LIKE '03%' ou Telephone LIKE '05%')
+    et (Op_En_Cours NOT LIKE 'Pas Interesse')
+
+    -> Date de rappel dans la période donnée
+       ET Famille exactement "Opticien FRANCE"
+       ET (téléphone commençant par 03 OU par 05)
+       ET Opération en cours différente de "Pas Interesse"
+
+Exemple 2 :
+
+    (Famille ='%Agence Pub%' ou Famille = 'SOCIETE')
+    Et (telephone LIKE '02%')
+    ET (PAYS = 'FRANCE')
+    Et ( CP NOT LIKE '97%')
+    Et (Date_Rappel < SYSDATE)
+
+    -> Famille contenant "Agence Pub" OU Famille exactement "SOCIETE"
+       ET téléphone commençant par 02
+       ET pays exactement "FRANCE"
+       ET code postal ne commençant pas par 97
+       ET date de rappel déjà passée (avant aujourd'hui)
+
+Exemple 3 :
+
+    (Famille='Opticien FRANCE')
+    ET ( Telephone LIKE '03%' ou Telephone LIKE '05%')
+    ET ( Note <>'9999' et Note <>'5555' et Note <>'4444')
+
+    -> Famille exactement "Opticien FRANCE"
+       ET (téléphone commençant par 03 OU par 05)
+       ET Note différente de chacune de ces trois valeurs "réservées"
+          (9999, 5555, 4444 semblent être des codes internes à exclure)
+
+
+Document généré le 17/08/2026 — reflète le comportement réel du code à
+cette date (webapp/Services/FiltreReelParser.cs).

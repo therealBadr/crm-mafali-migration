@@ -77,6 +77,12 @@ public partial class FranceOptique
 
     public bool RappelRdv { get; set; }
 
+    public string? Siret { get; set; }
+
+    public string? Siren { get; set; }
+
+    public bool FacturationElectronique { get; set; }
+
     public virtual ICollection<Ca> Cas { get; set; } = new List<Ca>();
 
     public virtual TypeFamille? FamilleNavigation { get; set; }

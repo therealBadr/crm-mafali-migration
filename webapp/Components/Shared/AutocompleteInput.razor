@@ -1,0 +1,123 @@
+@* Reusable typeahead: as the user types, suggests real values already
+   present in the database for that field, instead of a rigid dropdown or a
+   blind free-text box. Debounced on the C# side (cancel-and-restart via
+   CancellationTokenSource) rather than JS — this app already avoids custom
+   JS wherever a server-side equivalent is simple enough, and this qualifies.
+   Selecting a suggestion uses the mousedown-preventDefault + click split so
+   the input never loses focus (and blurs the dropdown away) before the
+   click actually registers. *@
+@implements IDisposable
+
+<div class="ac-wrap">
+    <input class="text-input" value="@Value" disabled="@Disabled" placeholder="@Placeholder"
+           @oninput="OnInput" @onfocus="OnFocus" @onblur="OnBlur" @onkeydown="OnKeyDown" autocomplete="off" />
+    @if (ShowSuggestions && Suggestions.Count > 0)
+    {
+        <div class="ac-suggestions">
+            @for (var i = 0; i < Suggestions.Count; i++)
+            {
+                var idx = i;
+                var s = Suggestions[i];
+                <div class="ac-suggestion @(idx == HighlightedIndex ? "ac-suggestion-highlighted" : "")"
+                     @onmousedown:preventDefault="true" @onclick="() => SelectSuggestion(s)"
+                     @onmouseenter="() => HighlightedIndex = idx">
+                    @s
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    // Defaults to a visible placeholder rather than null, so any field using
+    // this component reads as "this one offers suggestions" at a glance —
+    // fields without it (plain inputs, textareas, selects) are visually
+    // distinguishable without having to try typing in each one to find out.
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public Func<string, Task<List<string>>>? SuggestFunc { get; set; }
+    [Parameter] public string? Placeholder { get; set; } = "Suggestions…";
+    [Parameter] public bool Disabled { get; set; }
+
+    private List<string> Suggestions = new();
+    private bool ShowSuggestions;
+    private int HighlightedIndex = -1;
+    private CancellationTokenSource? _debounceCts;
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+        HighlightedIndex = -1;
+
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        if (string.IsNullOrWhiteSpace(Value) || SuggestFunc is null)
+        {
+            Suggestions = new();
+            ShowSuggestions = false;
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(250, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        Suggestions = await SuggestFunc(Value);
+        ShowSuggestions = Suggestions.Count > 0;
+        HighlightedIndex = Suggestions.Count > 0 ? 0 : -1;
+        StateHasChanged();
+    }
+
+    private void OnFocus()
+    {
+        if (Suggestions.Count > 0) ShowSuggestions = true;
+    }
+
+    private void OnBlur() => ShowSuggestions = false;
+
+    private async Task SelectSuggestion(string s)
+    {
+        Value = s;
+        ShowSuggestions = false;
+        HighlightedIndex = -1;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    // No preventDefault here on purpose — Up/Down/Enter/Escape have no
+    // disruptive default behavior on a plain single-line, non-form input, and
+    // Blazor's preventDefault modifier applies to the whole keydown binding,
+    // not per-key, so using it here would risk swallowing regular typing too.
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (!ShowSuggestions || Suggestions.Count == 0) return;
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                HighlightedIndex = (HighlightedIndex + 1) % Suggestions.Count;
+                break;
+            case "ArrowUp":
+                HighlightedIndex = HighlightedIndex <= 0 ? Suggestions.Count - 1 : HighlightedIndex - 1;
+                break;
+            case "Enter":
+                if (HighlightedIndex >= 0 && HighlightedIndex < Suggestions.Count)
+                {
+                    await SelectSuggestion(Suggestions[HighlightedIndex]);
+                }
+                break;
+            case "Escape":
+                ShowSuggestions = false;
+                break;
+        }
+    }
+
+    public void Dispose() => _debounceCts?.Cancel();
+}

@@ -1,0 +1,293 @@
+@page "/historiques/new"
+@page "/historiques/{IdHisto:long}/edit"
+@inject HistoriqueService HistoriqueSvc
+@inject NavigationManager Nav
+@inject AssistanteService AssistanteSvc
+@inject FranchiseService FranchiseSvc
+
+@* Mirrors Fen_Detail_Historique. Fields ordered per the real doc's own
+   "Ordre navigation" values, not the order they happened to appear in the
+   dump. No field is marked required anywhere in the legacy form — matched
+   here exactly, no validation added.
+
+   Num_Client is the one deliberate divergence: freely editable in the
+   legacy on both create AND edit (Risk Register #13 — a history row can be
+   silently re-pointed to a different client, no confirmation). Confirmed
+   with Badr: still settable when creating a row, but locked once it
+   exists. *@
+
+<PageTitle>@(IsEditMode ? "Modifier Historique" : "Nouvel Historique")</PageTitle>
+
+<div class="form-page">
+    <h2 class="form-page-title">Mafali CRM</h2>
+    <h3 class="form-page-subtitle">@(IsEditMode ? "Modifier Historique" : "Nouvel Historique")</h3>
+
+    @if (Loading)
+    {
+        <p class="dimmed">Chargement…</p>
+    }
+    else
+    {
+        <div class="form-grid">
+            <label for="f-numclient">Numéro Client</label>
+            @if (IsEditMode)
+            {
+                <input id="f-numclient" class="text-input" value="@NumClient" disabled title="Non modifiable — évite de re-pointer un historique vers un autre client par erreur" />
+            }
+            else
+            {
+                <input id="f-numclient" class="text-input" type="number" value="@NumClient"
+                       @oninput="e => NumClient = ParseLong(e.Value?.ToString())" />
+            }
+
+            <label for="f-assistante">Assistante Commerciale</label>
+            <select id="f-assistante" class="text-input" value="@(Input.AssistanteCommercial ?? "")"
+                    @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var a in AssistanteOptions)
+                {
+                    <option value="@a">@a</option>
+                }
+            </select>
+
+            <label for="f-datesaisie">Date de Saisie</label>
+            <input id="f-datesaisie" class="text-input" type="date" value="@(Input.DateSaisie?.ToString("yyyy-MM-dd"))"
+                   @onchange="e => Input.DateSaisie = ParseDate(e.Value?.ToString())" />
+
+            <label for="f-operation">Opération</label>
+            <input id="f-operation" class="text-input" maxlength="50" value="@Input.Operation"
+                   @oninput="e => Input.Operation = e.Value?.ToString()" />
+
+            <label for="f-heuresaisie">Heure de Saisie</label>
+            <input id="f-heuresaisie" class="text-input" type="time" value="@(Input.HeureSaisie?.ToString("HH:mm"))"
+                   @onchange="e => Input.HeureSaisie = ParseTime(e.Value?.ToString())" />
+
+            <label for="f-statusvente">Status Vente</label>
+            <input id="f-statusvente" class="text-input" maxlength="50" value="@Input.StatusVente"
+                   @oninput="e => Input.StatusVente = e.Value?.ToString()" />
+
+            <label for="f-note">Notes</label>
+            <input id="f-note" class="text-input" maxlength="250" value="@Input.Note"
+                   @oninput="e => Input.Note = e.Value?.ToString()" />
+
+            <label for="f-daterappel">Date de Rappel</label>
+            <input id="f-daterappel" class="text-input" type="date" value="@(Input.DateRappel?.ToString("yyyy-MM-dd"))"
+                   @onchange="e => Input.DateRappel = ParseDate(e.Value?.ToString())" />
+
+            <label for="f-heurerappel">Heure de Rappel</label>
+            <input id="f-heurerappel" class="text-input" type="time" value="@(Input.HeureRappel?.ToString("HH:mm"))"
+                   @onchange="e => Input.HeureRappel = ParseTime(e.Value?.ToString())" />
+
+            <label for="f-franchise">Franchise</label>
+            <select id="f-franchise" class="text-input" value="@(Input.Franchise ?? "")"
+                    @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FranchiseOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
+
+            <label for="f-raison">Raison Sociale</label>
+            <input id="f-raison" class="text-input" maxlength="60" value="@Input.RaisonSociale"
+                   @oninput="e => Input.RaisonSociale = e.Value?.ToString()" />
+
+            <label for="f-cp">Code Postal</label>
+            <input id="f-cp" class="text-input" maxlength="5" value="@Input.Cp"
+                   @oninput="e => Input.Cp = e.Value?.ToString()" />
+
+            <label for="f-ville">Ville</label>
+            <input id="f-ville" class="text-input" maxlength="40" value="@Input.Ville"
+                   @oninput="e => Input.Ville = e.Value?.ToString()" />
+
+            <label for="f-magasin">Magasin</label>
+            <input id="f-magasin" class="text-input" value="@Input.MagasinPrincipal"
+                   @oninput="e => Input.MagasinPrincipal = e.Value?.ToString()" />
+
+            <label for="f-statut">Statut Client</label>
+            <select id="f-statut" class="text-input" value="@Input.StatutsClients" @onchange="e => Input.StatutsClients = e.Value?.ToString()">
+                <option value="">—</option>
+                <option value="Payés">Payés</option>
+                <option value="Impayés">Impayés</option>
+                <option value="Bloqués">Bloqués</option>
+            </select>
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert">@Error</div>
+        }
+
+        <div class="modal-actions">
+            <button class="btn btn-default" @onclick="Cancel">Annuler</button>
+            <button class="btn btn-primary" disabled="@Submitting" @onclick="Submit">Valider</button>
+        </div>
+    }
+</div>
+
+@if (ConflictDialogOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConflictDialogOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Conflit détecté</h3>
+            <p class="confirm-text">
+                Cet historique a été modifié par quelqu'un d'autre pendant que vous le modifiiez.
+                Voici les champs concernés :
+            </p>
+            <div class="conflict-list">
+                @foreach (var c in Conflicts)
+                {
+                    <div class="conflict-row">
+                        <span class="conflict-field">@c.Field</span>
+                        <span class="conflict-values">Vous : @c.MyValue — Actuel : @c.CurrentValue</span>
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="ReloadAfterConflict">Recharger</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ForceApply">Écraser quand même</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long? IdHisto { get; set; }
+
+    private bool IsEditMode => IdHisto is not null;
+    private bool Loading = true;
+    private bool Submitting;
+    private string? Error;
+    private HistoriqueInput Input = new();
+    private HistoriqueInput? Baseline;
+    private long? NumClient;
+    private bool ConflictDialogOpen;
+    private List<FieldConflict> Conflicts = new();
+    private List<string> AssistanteOptions = new();
+    private List<string> FranchiseOptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loading = true;
+        try
+        {
+            AssistanteOptions = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+            FranchiseOptions = await FranchiseSvc.ListAsync();
+            if (IsEditMode)
+            {
+                var existing = await HistoriqueSvc.GetByIdAsync(IdHisto!.Value);
+                if (existing is null)
+                {
+                    Error = "Historique introuvable.";
+                    return;
+                }
+                NumClient = existing.NumClient;
+                Input = HistoriqueInput.FromEntity(existing);
+                Baseline = HistoriqueInput.FromEntity(existing);
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    // forceLoad: true — a real full page reload, not Blazor's enhanced
+    // (client-side, DOM-patching) navigation. Fichier_Historique's grid uses
+    // <Virtualize ItemsProvider>, which sets up a JS-side IntersectionObserver
+    // to decide what to render. Confirmed by testing: returning here via
+    // enhanced navigation leaves that observer in a stale state — the count
+    // and headers render correctly (they're plain server-rendered content),
+    // but the observer never fires again, so no rows ever get drawn, and
+    // nothing short of a real reload recovers it. A full reload guarantees a
+    // completely fresh JS-side state every time.
+    private void Cancel() => Nav.NavigateTo("/fichier-historique", forceLoad: true);
+
+    private Task Submit() => SaveAsync(force: false);
+
+    // Retry after the user has seen the conflict list and explicitly chose
+    // to overwrite anyway.
+    private Task ForceApply()
+    {
+        ConflictDialogOpen = false;
+        return SaveAsync(force: true);
+    }
+
+    private async Task ReloadAfterConflict()
+    {
+        ConflictDialogOpen = false;
+        Conflicts = new();
+        if (IdHisto is null) return;
+        var existing = await HistoriqueSvc.GetByIdAsync(IdHisto.Value);
+        if (existing is null)
+        {
+            Error = "Historique introuvable.";
+            return;
+        }
+        Input = HistoriqueInput.FromEntity(existing);
+        Baseline = HistoriqueInput.FromEntity(existing);
+    }
+
+    private async Task SaveAsync(bool force)
+    {
+        Submitting = true;
+        Error = null;
+        try
+        {
+            if (IsEditMode)
+            {
+                if (Baseline is null)
+                {
+                    Submitting = false;
+                    return;
+                }
+                var result = await HistoriqueSvc.UpdateWithConflictCheckAsync(IdHisto!.Value, Baseline, Input, force);
+                if (!result.Success)
+                {
+                    Conflicts = result.Conflicts;
+                    ConflictDialogOpen = true;
+                    Submitting = false;
+                    return;
+                }
+            }
+            else
+            {
+                if (NumClient is null)
+                {
+                    Error = "Numéro Client est requis.";
+                    Submitting = false;
+                    return;
+                }
+                await HistoriqueSvc.CreateAsync(NumClient.Value, Input);
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+            Submitting = false;
+            return;
+        }
+
+        // Deliberately nothing after this — Cancel() proved to behave
+        // differently from Submit() specifically because Submit() used to
+        // still mutate state (Submitting = false in a `finally`) and
+        // trigger a render request *after* calling NavigateTo(forceLoad:
+        // true), racing the real browser navigation. Cancel() never had
+        // that trailing state change. No further code should run here on
+        // the success path — we're leaving this page.
+        Nav.NavigateTo("/fichier-historique", forceLoad: true);
+    }
+
+    // TryParse, not Parse — these run directly inside inline @onchange/@oninput
+    // lambdas with no surrounding try/catch, so a malformed value (unlikely
+    // given the browser's native date/time pickers constrain input, but not
+    // impossible) must fail silently here rather than throwing and crashing
+    // the whole Blazor circuit.
+    private static long? ParseLong(string? s) => long.TryParse(s, out var v) ? v : null;
+    private static DateOnly? ParseDate(string? s) => DateOnly.TryParse(s, out var v) ? v : null;
+    private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var v) ? v : null;
+}

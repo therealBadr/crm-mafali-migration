@@ -1,0 +1,821 @@
+@page "/recherche-client"
+@using System.Text.Json
+@inject ClientFilterService ClientFilterSvc
+@inject ClientService ClientSvc
+@inject NavigationManager Nav
+@inject FamilleService FamilleSvc
+@inject FranchiseService FranchiseSvc
+@inject PaysService PaysSvc
+@inject AssistanteService AssistanteSvc
+
+@* Mirrors Fen_Recherche_Client — multi-criteria search across every client
+   field simultaneously (fill in one or more, get everyone who matches all
+   of them). Traced against the real doc's code, then adjusted per Badr's
+   direction on three open questions:
+
+   - Free-text fields are backed by AutocompleteInput (Components/Shared) —
+     suggests real values already in france_optique as you type, and the
+     actual search uses Contains, not the legacy's invisible-to-us exact
+     match. Famille/Franchise 1-4/Pays/Assistante Commerciale were
+     originally the same treatment, but changed 2026-08-18 to real
+     `<select>` dropdowns sourced from the reference tables (Familles/
+     Franchises/Pays/Assistantes) instead — a standing rule now (see
+     PROGRESS.md "Standing rule: reference-data fields must be dropdowns
+     everywhere"): this page's "Enregistrer Modification" writes these
+     same values back into france_optique, so free text here could
+     silently save a typo into a real client record, the exact thing that
+     rule exists to prevent. Search on these six switched from Contains to
+     an exact match (AddEq, not AddText) to match — a dropdown-selected
+     value should mean "exactly this", not "contains this".
+   - Adhérent excluded — same open thread as Parcours_Client, doesn't exist
+     in this schema yet.
+   - "Enregistrer Modification" — confirmed to build for real, with a
+     confirm dialog added (the legacy has none). One further safety choice
+     made here, not literally in the doc: only fields the user actually
+     typed something into get written back — a blank search field leaves
+     the client's existing value alone rather than clobbering it, since
+     ÉcranVersFichier()'s blanket overwrite in the legacy would otherwise
+     silently wipe any field you didn't happen to search by.
+
+   The grid starts empty (matches the doc exactly — no query runs on open,
+   only on Rechercher Critères or Tout Effacer). Status de la Vente stays
+   disabled unless Opération en Cours is "Vente en Cours", matching the
+   doc's own live (non-commented-out) cascade line — same gating already
+   used on Parcours_Client. Its option list reuses the same real-data-backed
+   set already verified there, not this window's own separate (and
+   real-data-mismatched) hardcoded list. *@
+
+<PageTitle>Recherche Client Multi-Critères</PageTitle>
+
+<div class="rc-page">
+    <div class="rc-topbar">
+        <span class="rc-title">Recherche Client Multi-Critères</span>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert">@Error</div>
+    }
+
+    <div class="rc-body">
+        <div class="rc-col">
+            <div class="rc-field">
+                <label>Famille :</label>
+                <select class="text-input" value="@(Input.Famille ?? "")"
+                        @onchange="e => Input.Famille = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var f in FamilleOptions)
+                    {
+                        <option value="@f">@f</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Raison Sociale :</label>
+                <AutocompleteInput @bind-Value="Input.RaisonSociale" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("raison_sociale", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Complement :</label>
+                <AutocompleteInput @bind-Value="Input.Complement" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("complement", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Franchise 1 :</label>
+                <select class="text-input" value="@(Input.Franchise ?? "")"
+                        @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var f in FranchiseOptions)
+                    {
+                        <option value="@f">@f</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Franchise 2 :</label>
+                <select class="text-input" value="@(Input.Franchise2 ?? "")"
+                        @onchange="e => Input.Franchise2 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var f in FranchiseOptions)
+                    {
+                        <option value="@f">@f</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Franchise 3 :</label>
+                <select class="text-input" value="@(Input.Franchise3 ?? "")"
+                        @onchange="e => Input.Franchise3 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var f in FranchiseOptions)
+                    {
+                        <option value="@f">@f</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Franchise 4 :</label>
+                <select class="text-input" value="@(Input.Franchise4 ?? "")"
+                        @onchange="e => Input.Franchise4 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var f in FranchiseOptions)
+                    {
+                        <option value="@f">@f</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Rue :</label>
+                <AutocompleteInput @bind-Value="Input.Rue" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("rue", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Localisation 1 :</label>
+                <AutocompleteInput @bind-Value="Input.Localisation1" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("localisation_1", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Localisation 2 :</label>
+                <AutocompleteInput @bind-Value="Input.Localisation2" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("localisation_2", p)' />
+            </div>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 0 0 100px;">
+                    <label>Code Postal :</label>
+                    <AutocompleteInput @bind-Value="Input.Cp" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("cp", p)' />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Ville :</label>
+                    <AutocompleteInput @bind-Value="Input.Ville" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("ville", p)' />
+                </div>
+            </div>
+            <div class="rc-field">
+                <label>Pays :</label>
+                <select class="text-input" value="@(Input.Pays ?? "")"
+                        @onchange="e => Input.Pays = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var p in PaysOptions)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Magasin :</label>
+                <AutocompleteInput @bind-Value="Input.MagasinPrincipal" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("magasin_principal", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Note :</label>
+                <textarea class="text-input" rows="4" @bind="Input.Note"></textarea>
+            </div>
+        </div>
+
+        <div class="rc-col">
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Telephone de référence :</label>
+                    <AutocompleteInput @bind-Value="Input.Telephone" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("telephone", p)' />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Portable :</label>
+                    <AutocompleteInput @bind-Value="Input.Portable" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("portable", p)' />
+                </div>
+            </div>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Telephone bis :</label>
+                    <AutocompleteInput @bind-Value="Input.TelBis" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("tel_bis", p)' />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Fax :</label>
+                    <AutocompleteInput @bind-Value="Input.Fax" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("fax", p)' />
+                </div>
+            </div>
+            <div class="rc-field">
+                <label>Adresse Email :</label>
+                <AutocompleteInput @bind-Value="Input.Email" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("email", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Assist Commerciale :</label>
+                <select class="text-input" value="@(Input.AssistanteCommercial ?? "")"
+                        @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    @foreach (var a in AssistanteOptions)
+                    {
+                        <option value="@a">@a</option>
+                    }
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Responsable Achat :</label>
+                <AutocompleteInput @bind-Value="Input.ResponsableAchat" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("responsable_achat", p)' />
+            </div>
+            <div class="rc-field">
+                <label>Opération en Cours :</label>
+                <select class="text-input" value="@(Input.OpEnCours ?? "")" @onchange="OnOperationChange">
+                    <option value="">Toutes</option>
+                    <option value="A Rappeler Mois">A Rappeler Mois</option>
+                    <option value="A Rappeler Date">A Rappeler Date</option>
+                    <option value="A Rappeler Date Heure">A Rappeler Date Heure</option>
+                    <option value="Pas Intéressé">Pas Intéressé</option>
+                    <option value="Vente en Cours">Vente en Cours</option>
+                </select>
+            </div>
+            <div class="rc-field">
+                <label>Status de la Vente :</label>
+                <select class="text-input" value="@(Input.StatusVente ?? "")"
+                        @onchange="e => Input.StatusVente = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">Tous</option>
+                    <option value="Devis en cours">Devis en cours</option>
+                    <option value="Vente (BAT Signé)">Vente (BAT Signé)</option>
+                    <option value="Vente (BAT Original)">Vente (BAT Original)</option>
+                    <option value="Vente (Bon de Commande)">Vente (Bon de Commande)</option>
+                    <option value="Vente Annulée">Vente Annulée</option>
+                </select>
+            </div>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Date Saisie :</label>
+                    <input class="text-input" type="date" value="@(Input.DateSaisie?.ToString("yyyy-MM-dd"))"
+                           @onchange="e => Input.DateSaisie = ParseDate(e.Value?.ToString())" />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Heure Saisie :</label>
+                    <input class="text-input" type="time" value="@(Input.HeureSaisie?.ToString("HH:mm"))"
+                           @onchange="e => Input.HeureSaisie = ParseTime(e.Value?.ToString())" />
+                </div>
+            </div>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Date Rappel :</label>
+                    <input class="text-input" type="date" value="@(Input.DateRappel?.ToString("yyyy-MM-dd"))"
+                           @onchange="e => Input.DateRappel = ParseDate(e.Value?.ToString())" />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Heure Rappel :</label>
+                    <input class="text-input" type="time" value="@(Input.HeureRappel?.ToString("HH:mm"))"
+                           @onchange="e => Input.HeureRappel = ParseTime(e.Value?.ToString())" />
+                </div>
+            </div>
+            <div class="rc-field">
+                <label>Numéro Client :</label>
+                <input class="text-input" type="number" value="@Input.CleOpl"
+                       @oninput="e => Input.CleOpl = long.TryParse(e.Value?.ToString(), out var v) ? v : null" />
+            </div>
+            <div class="rc-field">
+                <label>Statuts clients :</label>
+                <select class="text-input" value="@(Input.StatutsClients ?? "")"
+                        @onchange="e => Input.StatutsClients = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                    <option value="">—</option>
+                    <option value="Payés">Payés</option>
+                    <option value="Impayés">Impayés</option>
+                    <option value="Bloqués">Bloqués</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="rc-actions">
+        <button class="btn btn-primary" disabled="@Loading" @onclick="Search">Rechercher Critères</button>
+        <button class="btn btn-default" disabled="@(SelectedCleOpl is null)" @onclick="LoadSelected">Charger Informations</button>
+        @{ var phoningUrl = ComputePhoningUrl(); }
+        @if (phoningUrl is not null)
+        {
+            <a href="@phoningUrl" target="_blank" class="btn btn-default" style="display: inline-block; text-decoration: none;">Ouvrir le Phoning</a>
+        }
+        else
+        {
+            <button class="btn btn-default" @onclick="ShowPhoningSelectionError">Ouvrir le Phoning</button>
+        }
+        <button class="btn btn-default" disabled="@(SelectedCleOpl is null || Submitting)" @onclick="OpenSaveConfirm">Enregistrer Modification</button>
+        <button class="btn btn-default" @onclick="ClearAll">Tout Effacer</button>
+        <button class="btn btn-default" @onclick='() => Nav.NavigateTo("/clients")'>Fermer</button>
+    </div>
+
+    <div class="rc-results table-wrap">
+        <div style="width: @(TotalWidth)px;">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in Columns)
+                {
+                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                }
+            </div>
+            @if (Loading)
+            {
+                <p class="dimmed">Recherche en cours…</p>
+            }
+            else if (Results.Count == 0 && HasSearched)
+            {
+                <p class="rc-zero-results">
+                    Aucun client ne correspond aux critères saisis. Les critères se combinent tous
+                    ensemble (un client doit correspondre à chacun d'eux) — essayez avec moins de
+                    critères, ou vérifiez les valeurs saisies.
+                </p>
+            }
+            else if (Results.Count == 0)
+            {
+                <p class="dimmed">Aucun résultat. Saisissez un ou plusieurs critères puis cliquez sur Rechercher Critères.</p>
+            }
+            else
+            {
+                <Virtualize Items="Results" Context="c" ItemSize="34">
+                    <div class="row @(c.CleOpl == SelectedCleOpl ? "selected" : "")"
+                         @onclick="() => SelectedCleOpl = c.CleOpl">
+                        @foreach (var col in Columns)
+                        {
+                            <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                                @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
+                                {
+                                    <span class="badge @badgeClass">@c.StatutsClients</span>
+                                }
+                                else
+                                {
+                                    @GetCellText(c, col.Key)
+                                }
+                            </div>
+                        }
+                    </div>
+                </Virtualize>
+            }
+        </div>
+    </div>
+    <p class="count">@Results.Count enregistrement@(Results.Count != 1 ? "s" : "")</p>
+</div>
+
+@if (ConfirmSaveOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConfirmSaveOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Confirmer</h3>
+            <p class="confirm-text">
+                Enregistrer les modifications sur le client sélectionné (Cle Opl @SelectedCleOpl) ?
+                Seuls les champs renseignés ci-dessus seront modifiés.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="() => ConfirmSaveOpen = false">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ConfirmSave">Valider</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ConflictDialogOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConflictDialogOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Conflit détecté</h3>
+            <p class="confirm-text">
+                Ce client a été modifié par quelqu'un d'autre pendant l'enregistrement.
+                Voici les champs concernés :
+            </p>
+            <div class="conflict-list">
+                @foreach (var c in Conflicts)
+                {
+                    <div class="conflict-row">
+                        <span class="conflict-field">@c.Field</span>
+                        <span class="conflict-values">Vous : @c.MyValue — Actuel : @c.CurrentValue</span>
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="ReloadAfterConflict">Recharger</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ForceApply">Écraser quand même</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private class ClientSearchInput
+    {
+        public string? Famille { get; set; }
+        public string? RaisonSociale { get; set; }
+        public string? Complement { get; set; }
+        public string? Franchise { get; set; }
+        public string? Franchise2 { get; set; }
+        public string? Franchise3 { get; set; }
+        public string? Franchise4 { get; set; }
+        public string? Rue { get; set; }
+        public string? Localisation1 { get; set; }
+        public string? Localisation2 { get; set; }
+        public string? Cp { get; set; }
+        public string? Ville { get; set; }
+        public string? Pays { get; set; }
+        public string? MagasinPrincipal { get; set; }
+        public string? Note { get; set; }
+        public string? Telephone { get; set; }
+        public string? Portable { get; set; }
+        public string? TelBis { get; set; }
+        public string? Fax { get; set; }
+        public string? Email { get; set; }
+        public string? AssistanteCommercial { get; set; }
+        public string? ResponsableAchat { get; set; }
+        public string? OpEnCours { get; set; }
+        public string? StatusVente { get; set; }
+        public DateOnly? DateSaisie { get; set; }
+        public TimeOnly? HeureSaisie { get; set; }
+        public DateOnly? DateRappel { get; set; }
+        public TimeOnly? HeureRappel { get; set; }
+        public long? CleOpl { get; set; }
+        public string? StatutsClients { get; set; }
+    }
+
+    private record ColumnDef(string Key, string Label, int Width);
+
+    // Exact 27-column set from the real doc's Table_Req_Recherche_Partout,
+    // reusing the same widths already established for these fields on
+    // Filtres Prédéfinis's own client grid.
+    private readonly List<ColumnDef> Columns = new()
+    {
+        new("cle_opl", "N° Client", 80),
+        new("famille", "Famille", 140),
+        new("raison_sociale", "Raison Sociale", 200),
+        new("complement", "Complement", 160),
+        new("franchise", "Franchise", 140),
+        new("franchise2", "Franchise 2", 140),
+        new("franchise3", "Franchise 3", 140),
+        new("franchise4", "Franchise 4", 140),
+        new("rue", "Rue", 160),
+        new("localisation_1", "Localisation 1", 140),
+        new("localisation_2", "Localisation 2", 140),
+        new("cp", "Code Postal", 90),
+        new("ville", "Ville", 140),
+        new("pays", "Pays", 120),
+        new("telephone", "Telephone", 110),
+        new("portable", "Portable", 110),
+        new("email", "Email", 180),
+        new("assistante_commercial", "Assistante Commerciale", 180),
+        new("responsable_achat", "Responsable Achat", 160),
+        new("op_en_cours", "Opération en Cours", 160),
+        new("status_vente", "Status Vente", 140),
+        new("date_saisie", "Date Saisie", 100),
+        new("heure_saisie", "Heure Saisie", 90),
+        new("date_rappel", "Date Rappel", 100),
+        new("heure_rappel", "Heure Rappel", 90),
+        new("note", "Note", 200),
+        new("statuts_clients", "Statut Client", 140),
+    };
+
+    private int TotalWidth => Columns.Sum(c => c.Width);
+
+    private ClientSearchInput Input = new();
+    private List<FranceOptique> Results = new();
+    private long? SelectedCleOpl;
+    private bool Loading;
+    private bool Submitting;
+    private bool ConfirmSaveOpen;
+    private bool ConflictDialogOpen;
+    private List<FieldConflict> Conflicts = new();
+    private string? Error;
+    private long? FirstClientIdFallback;
+    private bool HasSearched;
+    private List<string> FamilleOptions = new();
+    private List<string> FranchiseOptions = new();
+    private List<string> PaysOptions = new();
+    private List<string> AssistanteOptions = new();
+
+    // Only fetch made on page load — everything else here only runs off an
+    // explicit Rechercher Critères/Tout Effacer click, matching the legacy
+    // exactly (the grid starts empty, no query on open). This one exists so
+    // "Ouvrir le Phoning" with every field still blank has somewhere to
+    // point without needing an async lookup at click time (see
+    // ComputePhoningUrl for why that matters).
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            FirstClientIdFallback = await ClientSvc.GetFirstCleOplAsync();
+            FamilleOptions = await FamilleSvc.ListAsync();
+            FranchiseOptions = await FranchiseSvc.ListAsync();
+            PaysOptions = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
+            AssistanteOptions = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    // Unlike Parcours_Client (a data-entry form, where Status de la Vente is
+    // gated behind Opération = "Vente en Cours" because it's tied to a
+    // specific data-entry action), this is a search screen — every field
+    // should be filterable independently of the others, so Status de la
+    // Vente stays freely selectable regardless of Opération en Cours.
+    private void OnOperationChange(ChangeEventArgs e)
+    {
+        Input.OpEnCours = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString();
+    }
+
+    private async Task Search()
+    {
+        Loading = true;
+        Error = null;
+        try
+        {
+            Results = (await ClientFilterSvc.SearchAsync(BuildConditions())).Rows;
+            SelectedCleOpl = null;
+            HasSearched = true;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task ClearAll()
+    {
+        Input = new();
+        SelectedCleOpl = null;
+        await Search();
+    }
+
+    private List<Condition> BuildConditions()
+    {
+        var list = new List<Condition>();
+
+        void AddText(string field, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                list.Add(new Condition { Field = field, Operator = Operator.Contains, Values = new() { value } });
+        }
+
+        void AddEq(string field, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                list.Add(new Condition { Field = field, Operator = Operator.Eq, Values = new() { value } });
+        }
+
+        // These six are dropdowns now, not free text (2026-08-18) — an exact
+        // match is the correct search semantics for a selected value, not
+        // Contains. Every other field below is still free text, still Contains.
+        AddEq("famille", Input.Famille);
+        AddText("raison_sociale", Input.RaisonSociale);
+        AddText("complement", Input.Complement);
+        AddEq("franchise", Input.Franchise);
+        AddEq("franchise2", Input.Franchise2);
+        AddEq("franchise3", Input.Franchise3);
+        AddEq("franchise4", Input.Franchise4);
+        AddText("rue", Input.Rue);
+        AddText("localisation_1", Input.Localisation1);
+        AddText("localisation_2", Input.Localisation2);
+        AddText("cp", Input.Cp);
+        AddText("ville", Input.Ville);
+        AddEq("pays", Input.Pays);
+        AddText("magasin_principal", Input.MagasinPrincipal);
+        AddText("note", Input.Note);
+        AddText("telephone", Input.Telephone);
+        AddText("portable", Input.Portable);
+        AddText("tel_bis", Input.TelBis);
+        AddText("fax", Input.Fax);
+        AddText("email", Input.Email);
+        AddEq("assistante_commercial", Input.AssistanteCommercial);
+        AddText("responsable_achat", Input.ResponsableAchat);
+        AddEq("op_en_cours", Input.OpEnCours);
+        AddEq("status_vente", Input.StatusVente);
+        AddEq("statuts_clients", Input.StatutsClients);
+
+        if (Input.CleOpl is not null)
+            list.Add(new Condition { Field = "cle_opl", Operator = Operator.Eq, Values = new() { Input.CleOpl.Value.ToString() } });
+        if (Input.DateSaisie is not null)
+            list.Add(new Condition { Field = "date_saisie", Operator = Operator.Eq, Values = new() { Input.DateSaisie.Value.ToString("yyyy-MM-dd") } });
+        if (Input.HeureSaisie is not null)
+            list.Add(new Condition { Field = "heure_saisie", Operator = Operator.Eq, Values = new() { Input.HeureSaisie.Value.ToString("HH:mm") } });
+        if (Input.DateRappel is not null)
+            list.Add(new Condition { Field = "date_rappel", Operator = Operator.Eq, Values = new() { Input.DateRappel.Value.ToString("yyyy-MM-dd") } });
+        if (Input.HeureRappel is not null)
+            list.Add(new Condition { Field = "heure_rappel", Operator = Operator.Eq, Values = new() { Input.HeureRappel.Value.ToString("HH:mm") } });
+
+        return list;
+    }
+
+    private void LoadSelected()
+    {
+        var c = Results.FirstOrDefault(r => r.CleOpl == SelectedCleOpl);
+        if (c is null) return;
+        Input.Famille = c.Famille;
+        Input.RaisonSociale = c.RaisonSociale;
+        Input.Complement = c.Complement;
+        Input.Franchise = c.Franchise;
+        Input.Franchise2 = c.Franchise2;
+        Input.Franchise3 = c.Franchise3;
+        Input.Franchise4 = c.Franchise4;
+        Input.Rue = c.Rue;
+        Input.Localisation1 = c.Localisation1;
+        Input.Localisation2 = c.Localisation2;
+        Input.Cp = c.Cp;
+        Input.Ville = c.Ville;
+        Input.Pays = c.Pays;
+        Input.MagasinPrincipal = c.MagasinPrincipal;
+        Input.Note = c.Note;
+        Input.Telephone = c.Telephone;
+        Input.Portable = c.Portable;
+        Input.TelBis = c.TelBis;
+        Input.Fax = c.Fax;
+        Input.Email = c.Email;
+        Input.AssistanteCommercial = c.AssistanteCommercial;
+        Input.ResponsableAchat = c.ResponsableAchat;
+        Input.OpEnCours = string.IsNullOrEmpty(c.OpEnCours) ? null : c.OpEnCours;
+        Input.StatusVente = string.IsNullOrEmpty(c.StatusVente) || c.StatusVente == "-1" ? null : c.StatusVente;
+        Input.DateSaisie = c.DateSaisie;
+        Input.HeureSaisie = c.HeureSaisie;
+        Input.DateRappel = c.DateRappel;
+        Input.HeureRappel = c.HeureRappel;
+        Input.CleOpl = c.CleOpl;
+        Input.StatutsClients = string.IsNullOrEmpty(c.StatutsClients) || c.StatutsClients == "-1" ? null : c.StatutsClients;
+    }
+
+    // Matches the legacy's own OuvreSoeur(Fen_Parcours_Client, ...) — "open
+    // sibling" opens a genuinely separate window alongside Fen_Recherche_
+    // Client, not a replacement of it — a real target="_blank" anchor here,
+    // not Nav.NavigateTo or a JS window.open() call. Deliberately not the
+    // latter: window.open() invoked via Blazor's JS interop happens on the
+    // far side of a SignalR round-trip, so Chrome no longer considers it
+    // part of the original click's user gesture and can silently block it —
+    // confirmed directly (it did open the right tab, but the round-trip
+    // left the browser in a stuck state afterward). A real anchor, clicked
+    // directly by the user, has none of that risk.
+    //
+    // The href has to be knowable synchronously for that to work, so the
+    // "nothing selected" fallback only covers the two cases where that's
+    // already true: a prior search's own first result (Results is already
+    // in memory — no new query needed), or, if the form is genuinely empty
+    // and no search has run yet, a single first-client value fetched once
+    // at page load (GetFirstCleOplAsync, below) rather than an unbounded
+    // fetch-then-open at click time.
+    private string? ComputePhoningUrl()
+    {
+        var startId = SelectedCleOpl;
+        if (startId is null && Results.Count > 0) startId = Results[0].CleOpl;
+        if (startId is null && BuildConditions().Count == 0) startId = FirstClientIdFallback;
+        if (startId is null) return null;
+
+        var json = JsonSerializer.Serialize(BuildConditions());
+        var encoded = Uri.EscapeDataString(json);
+        return $"/parcours-client?mode=recherche&criteria={encoded}&start={startId}";
+    }
+
+    private void ShowPhoningSelectionError() =>
+        Error = "Vous devez sélectionner une ligne, ou lancer une recherche (Rechercher Critères).";
+
+    private void OpenSaveConfirm()
+    {
+        if (SelectedCleOpl is null)
+        {
+            Error = "aucun enregistrement à modifier";
+            return;
+        }
+        ConfirmSaveOpen = true;
+    }
+
+    // Only fields the user actually typed something into get written back —
+    // see the top-of-file comment for why this deliberately isn't a literal
+    // port of ÉcranVersFichier()'s blanket overwrite.
+    private Task ConfirmSave()
+    {
+        ConfirmSaveOpen = false;
+        return SaveAsync(force: false);
+    }
+
+    // Retry after the user has seen the conflict list and explicitly chose
+    // to overwrite anyway.
+    private Task ForceApply()
+    {
+        ConflictDialogOpen = false;
+        return SaveAsync(force: true);
+    }
+
+    // No single loaded record to "reload" here the way Parcours_Client/
+    // ClientForm have — the search form itself isn't the thing that went
+    // stale, the selected result row is. Refreshing just that row (same as
+    // the normal success path already does) shows the real current data
+    // without discarding whatever criteria the user was building.
+    private async Task ReloadAfterConflict()
+    {
+        ConflictDialogOpen = false;
+        Conflicts = new();
+        if (SelectedCleOpl is null) return;
+        var refreshed = await ClientSvc.GetAsync(SelectedCleOpl.Value);
+        if (refreshed is not null)
+        {
+            var idx = Results.FindIndex(r => r.CleOpl == SelectedCleOpl);
+            if (idx >= 0) Results[idx] = refreshed;
+        }
+    }
+
+    private async Task SaveAsync(bool force)
+    {
+        if (SelectedCleOpl is null) return;
+        Submitting = true;
+        Error = null;
+        try
+        {
+            var existing = await ClientSvc.GetAsync(SelectedCleOpl.Value);
+            if (existing is null)
+            {
+                Error = "Client introuvable.";
+                return;
+            }
+
+            // Two independent snapshots of the same read: baseline stays
+            // untouched for the conflict comparison, patch is the one that
+            // gets overlaid with the search form's non-blank fields below.
+            var baseline = ParcoursClientInput.FromEntity(existing);
+            var patch = ParcoursClientInput.FromEntity(existing);
+            if (!string.IsNullOrWhiteSpace(Input.Famille)) patch.Famille = Input.Famille;
+            if (!string.IsNullOrWhiteSpace(Input.RaisonSociale)) patch.RaisonSociale = Input.RaisonSociale;
+            if (!string.IsNullOrWhiteSpace(Input.Complement)) patch.Complement = Input.Complement;
+            if (!string.IsNullOrWhiteSpace(Input.Franchise)) patch.Franchise = Input.Franchise;
+            if (!string.IsNullOrWhiteSpace(Input.Franchise2)) patch.Franchise2 = Input.Franchise2;
+            if (!string.IsNullOrWhiteSpace(Input.Franchise3)) patch.Franchise3 = Input.Franchise3;
+            if (!string.IsNullOrWhiteSpace(Input.Franchise4)) patch.Franchise4 = Input.Franchise4;
+            if (!string.IsNullOrWhiteSpace(Input.Rue)) patch.Rue = Input.Rue;
+            if (!string.IsNullOrWhiteSpace(Input.Localisation1)) patch.Localisation1 = Input.Localisation1;
+            if (!string.IsNullOrWhiteSpace(Input.Localisation2)) patch.Localisation2 = Input.Localisation2;
+            if (!string.IsNullOrWhiteSpace(Input.Cp)) patch.Cp = Input.Cp;
+            if (!string.IsNullOrWhiteSpace(Input.Ville)) patch.Ville = Input.Ville;
+            if (!string.IsNullOrWhiteSpace(Input.Pays)) patch.Pays = Input.Pays;
+            if (!string.IsNullOrWhiteSpace(Input.MagasinPrincipal)) patch.MagasinPrincipal = Input.MagasinPrincipal;
+            if (!string.IsNullOrWhiteSpace(Input.Note)) patch.Note = Input.Note;
+            if (!string.IsNullOrWhiteSpace(Input.Telephone)) patch.Telephone = Input.Telephone;
+            if (!string.IsNullOrWhiteSpace(Input.Portable)) patch.Portable = Input.Portable;
+            if (!string.IsNullOrWhiteSpace(Input.TelBis)) patch.TelBis = Input.TelBis;
+            if (!string.IsNullOrWhiteSpace(Input.Fax)) patch.Fax = Input.Fax;
+            if (!string.IsNullOrWhiteSpace(Input.Email)) patch.Email = Input.Email;
+            if (!string.IsNullOrWhiteSpace(Input.AssistanteCommercial)) patch.AssistanteCommercial = Input.AssistanteCommercial;
+            if (!string.IsNullOrWhiteSpace(Input.ResponsableAchat)) patch.ResponsableAchat = Input.ResponsableAchat;
+            if (!string.IsNullOrWhiteSpace(Input.OpEnCours)) patch.OpEnCours = Input.OpEnCours;
+            if (!string.IsNullOrWhiteSpace(Input.StatusVente)) patch.StatusVente = Input.StatusVente;
+            if (!string.IsNullOrWhiteSpace(Input.StatutsClients)) patch.StatutsClients = Input.StatutsClients;
+            if (Input.DateSaisie is not null) patch.DateSaisie = Input.DateSaisie;
+            if (Input.HeureSaisie is not null) patch.HeureSaisie = Input.HeureSaisie;
+            if (Input.DateRappel is not null) patch.DateRappel = Input.DateRappel;
+            if (Input.HeureRappel is not null) patch.HeureRappel = Input.HeureRappel;
+
+            var result = await ClientSvc.UpdateFullWithConflictCheckAsync(
+                SelectedCleOpl.Value, baseline, patch, force, excludeFromConflictCheck: new HashSet<string>());
+            if (!result.Success)
+            {
+                Conflicts = result.Conflicts;
+                ConflictDialogOpen = true;
+                return;
+            }
+
+            var refreshed = await ClientSvc.GetAsync(SelectedCleOpl.Value);
+            if (refreshed is not null)
+            {
+                var idx = Results.FindIndex(r => r.CleOpl == SelectedCleOpl);
+                if (idx >= 0) Results[idx] = refreshed;
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+
+    private static DateOnly? ParseDate(string? s) => DateOnly.TryParse(s, out var v) ? v : null;
+    private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var v) ? v : null;
+
+    private static string GetCellText(FranceOptique c, string key) => key switch
+    {
+        "cle_opl" => c.CleOpl.ToString(),
+        "famille" => c.Famille ?? "",
+        "raison_sociale" => c.RaisonSociale ?? "",
+        "complement" => c.Complement ?? "",
+        "franchise" => c.Franchise ?? "",
+        "franchise2" => c.Franchise2 ?? "",
+        "franchise3" => c.Franchise3 ?? "",
+        "franchise4" => c.Franchise4 ?? "",
+        "rue" => c.Rue ?? "",
+        "localisation_1" => c.Localisation1 ?? "",
+        "localisation_2" => c.Localisation2 ?? "",
+        "cp" => c.Cp ?? "",
+        "ville" => c.Ville ?? "",
+        "pays" => c.Pays ?? "",
+        "telephone" => c.Telephone ?? "",
+        "portable" => c.Portable ?? "",
+        "email" => c.Email ?? "",
+        "assistante_commercial" => c.AssistanteCommercial ?? "",
+        "responsable_achat" => c.ResponsableAchat ?? "",
+        "op_en_cours" => c.OpEnCours ?? "",
+        "status_vente" => c.StatusVente is "-1" or null ? "" : c.StatusVente,
+        "date_saisie" => c.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "heure_saisie" => c.HeureSaisie?.ToString("HH:mm") ?? "",
+        "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
+        "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
+        "note" => c.Note ?? "",
+        "statuts_clients" => c.StatutsClients is "-1" or null ? "" : c.StatutsClients,
+        _ => "",
+    };
+
+    private static string StatutBadgeClass(string? statut) => statut switch
+    {
+        "Payés" => "badge-success",
+        "Impayés" => "badge-warning",
+        "Bloqués" => "badge-danger",
+        _ => "",
+    };
+}

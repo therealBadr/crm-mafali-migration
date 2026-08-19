@@ -4,23 +4,125 @@
 :root {
     --navy: #0b2340;
     --navy-border: #2a4568;
-    --teal: #14b8a6;
-    --teal-hover: #0f9a8a;
-    --teal-active: #0c8072;
+    --teal: #d85a30;
+    --teal-hover: #c04a24;
+    --teal-active: #a83d1c;
     --header-bg: #f0f6fb;
     --header-text: #4a6178;
-    --row-hover: #f0faf8;
-    --row-selected: #e0f5f1;
+    --row-hover: #fdf3ef;
+    --row-selected: #fae4db;
     --border-light: #dbe6f0;
     --border-lighter: #eef3f8;
     --text-body: #1a2b3d;
     --header-strong-bg: #e4eef7;
     --header-border: #d5dce6;
-    --row-alt: #fafbfc;
+    --row-alt: #fdf9f5;
+    --slate-bg: #e2e5ea;
+    --slate-text: #40474f;
+    --danger-bg: #f9e4e2;
+    --danger-text: #7a2124;
+    --success: #4d7c2e;
+    --danger: #a3272c;
 }
 
 html, body {
     height: 100%;
+}
+
+.login-page {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 30% 20%, #123258 0%, transparent 55%),
+        radial-gradient(circle at 80% 85%, #0e2b4d 0%, transparent 50%),
+        var(--navy);
+}
+
+.login-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 40px 36px;
+    width: 380px;
+    max-width: 90vw;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.login-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+}
+
+.login-mark {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-active));
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card h1 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: -0.01em;
+}
+
+.login-sub {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--header-text);
+}
+
+.login-card label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--header-text);
+    margin: 18px 0 6px;
+}
+
+.login-card label:first-of-type {
+    margin-top: 0;
+}
+
+.login-card .text-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 14px;
+    padding: 11px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    margin-bottom: 0;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.login-card .text-input:focus {
+    outline: none;
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px var(--row-selected);
+}
+
+.login-card .btn-primary {
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 26px;
+}
+
+.login-card .alert {
+    margin-bottom: 20px;
 }
 
 body {
@@ -35,15 +137,15 @@ h1:focus {
 }
 
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid var(--success);
 }
 
 .invalid {
-    outline: 1px solid #e50000;
+    outline: 1px solid var(--danger);
 }
 
 .validation-message {
-    color: #e50000;
+    color: var(--danger);
 }
 
 .blazor-error-boundary {
@@ -134,7 +236,7 @@ h1:focus {
 }
 
 .btn:disabled {
-    opacity: 0.35;
+    opacity: 0.55;
     cursor: not-allowed;
 }
 
@@ -161,8 +263,8 @@ h1:focus {
 }
 
 .alert {
-    background: #fdecec;
-    color: #9c2b2b;
+    background: var(--danger-bg);
+    color: var(--danger-text);
     padding: 8px 12px;
     margin: 10px 16px;
     border-radius: 4px;
@@ -201,12 +303,39 @@ h1:focus {
 }
 
 .header-row .cell {
+    position: relative;
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--navy);
     border-right: 1px solid var(--header-border);
+}
+
+/* Sits on top of the 1px border-right above, not beside it — centering a
+   6px-wide grab target on that border is what makes it feel like you're
+   dragging the column edge itself, the same target excel/sheets uses. */
+.col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 2;
+}
+
+.col-resize-handle:hover {
+    background: var(--teal);
+    opacity: 0.6;
+}
+
+.col-resize-ghost {
+    position: fixed;
+    width: 2px;
+    background: var(--teal);
+    z-index: 2000;
+    pointer-events: none;
 }
 
 .row {
@@ -235,6 +364,7 @@ h1:focus {
 }
 
 .cell {
+    box-sizing: border-box;
     padding: 8px 12px;
     font-size: 13px;
     color: var(--text-body);
@@ -297,6 +427,19 @@ h1:focus {
     border: 1px solid var(--border-light);
     border-radius: 4px;
     margin-bottom: 10px;
+    background: #ffffff;
+    color: var(--text-body);
+}
+
+/* Browsers default disabled inputs/selects to a semi-transparent gray fill
+   with dimmed text — fine on a plain white page, unreadable on Fen_Parcours_
+   Client's navy topbar and much too faint anywhere fields are disabled by
+   default (most of that page). Solid, deliberately-chosen contrast instead. */
+.text-input:disabled {
+    background: #eef1f5;
+    color: var(--text-body);
+    opacity: 1;
+    cursor: not-allowed;
 }
 
 .modal-actions {
@@ -304,6 +447,36 @@ h1:focus {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 6px;
+}
+
+.conflict-list {
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 12px 0;
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+}
+
+.conflict-row {
+    padding: 8px 10px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.conflict-row:last-child {
+    border-bottom: none;
+}
+
+.conflict-field {
+    display: block;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 2px;
+}
+
+.conflict-values {
+    display: block;
+    color: var(--text-body);
 }
 
 .badge {
@@ -314,13 +487,28 @@ h1:focus {
 }
 
 .badge-teal {
-    background: #d6f5ef;
-    color: #0f6e56;
+    background: #fae4db;
+    color: #8a3216;
 }
 
 .badge-gray {
-    background: #eef0f3;
-    color: #556;
+    background: var(--slate-bg);
+    color: var(--slate-text);
+}
+
+.badge-success {
+    background: #e2f0d9;
+    color: #2f5518;
+}
+
+.badge-warning {
+    background: #fbe8cf;
+    color: #7a4a08;
+}
+
+.badge-danger {
+    background: var(--danger-bg);
+    color: var(--danger-text);
 }
 
 .checkbox-label {

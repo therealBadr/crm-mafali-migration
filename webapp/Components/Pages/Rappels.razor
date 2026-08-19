@@ -1,0 +1,130 @@
+@page "/rappels"
+@inject RappelService RappelSvc
+@inject NavigationManager Nav
+
+@* New screen, not a legacy port — the closest legacy equivalent is
+   Fen_Rappel (module 8), but that window's own query (REQ_RappelRDV) is an
+   exact Date_Rappel = today match with no overdue rollup, a documented
+   shortcoming rather than a design worth reproducing. See
+   RappelService.cs for the actual query and the "why <= today, why no
+   per-user filter yet" reasoning — not repeated here. *@
+
+<PageTitle>Rappels</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Rappels</span>
+    <div class="actions">
+        <button class="btn btn-outline" @onclick="Load">Actualiser</button>
+    </div>
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else if (Items.Count == 0)
+{
+    <p class="dimmed">Aucun rappel en attente.</p>
+}
+else
+{
+    <div class="table-wrap" style="overflow-x: auto;">
+        <div style="width: @(TotalWidth)px;">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in Columns)
+                {
+                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                }
+            </div>
+            @foreach (var c in Items)
+            {
+                <div class="row" @onclick="() => OpenParcours(c.CleOpl)">
+                    @foreach (var col in Columns)
+                    {
+                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                            @if (col.Key == "date_rappel")
+                            {
+                                @c.DateRappel!.Value.ToString("dd/MM/yyyy")
+                                @if (c.DateRappel!.Value < Today)
+                                {
+                                    <span class="badge badge-danger" style="margin-left: 6px;">En retard</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning" style="margin-left: 6px;">Aujourd'hui</span>
+                                }
+                            }
+                            else
+                            {
+                                @GetCellText(c, col.Key)
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    <p class="count">@Items.Count rappel@(Items.Count != 1 ? "s" : "") en attente</p>
+}
+</div>
+
+@code {
+    private record ColumnDef(string Key, string Label, int Width);
+
+    private readonly List<ColumnDef> Columns = new()
+    {
+        new("date_rappel", "Date Rappel", 200),
+        new("heure_rappel", "Heure Rappel", 90),
+        new("cle_opl", "Cle Opl", 80),
+        new("raison_sociale", "Raison Sociale", 220),
+        new("assistante_commercial", "Assistante Commerciale", 180),
+        new("telephone", "Telephone", 110),
+        new("note", "Note", 260),
+    };
+
+    private int TotalWidth => Columns.Sum(c => c.Width);
+
+    private List<FranceOptique> Items = new();
+    private bool Loading = true;
+    private string? Error;
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Loading = true;
+        try
+        {
+            Items = await RappelSvc.ListDueAsync();
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void OpenParcours(long cleOpl) => Nav.NavigateTo($"/parcours-client?mode=clients&start={cleOpl}");
+
+    private static string GetCellText(FranceOptique c, string key) => key switch
+    {
+        "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
+        "cle_opl" => c.CleOpl.ToString(),
+        "raison_sociale" => c.RaisonSociale ?? "",
+        "assistante_commercial" => c.AssistanteCommercial ?? "",
+        "telephone" => c.Telephone ?? "",
+        "note" => c.Note ?? "",
+        _ => "",
+    };
+}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webapp",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "webapp", "--launch-profile", "http"],
+      "port": 5297
+    }
+  ]
+}

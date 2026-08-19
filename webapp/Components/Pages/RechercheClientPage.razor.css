@@ -1,0 +1,83 @@
+.rc-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.rc-topbar {
+    padding: 10px 16px;
+    background: var(--navy);
+}
+
+.rc-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8f1fb;
+}
+
+.rc-body {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 24px;
+    padding: 16px;
+    overflow-y: auto;
+    max-height: 46vh;
+}
+
+.rc-col {
+    flex: 1;
+    min-width: 300px;
+}
+
+.rc-field {
+    margin-bottom: 10px;
+}
+
+.rc-field label {
+    display: block;
+    font-size: 12px;
+    color: var(--header-text);
+    margin-bottom: 3px;
+}
+
+.rc-field-row {
+    display: flex;
+    gap: 10px;
+}
+
+.rc-field-row .rc-field {
+    flex: 1;
+}
+
+.rc-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border-light);
+    border-bottom: 2px solid var(--navy-border);
+    background: var(--header-bg);
+}
+
+.rc-results {
+    flex: 1;
+    min-height: 0;
+}
+
+/* A real search that genuinely found nothing needs to look deliberate, not
+   like the page silently did nothing — same navy/teal language as the rest
+   of the app, but enough visual weight (border, background, padding) that
+   it can't be mistaken for the muted "you haven't searched yet" hint. */
+.rc-zero-results {
+    margin: 16px;
+    padding: 14px 16px;
+    background: var(--header-bg);
+    border: 1px solid var(--teal);
+    border-left: 4px solid var(--teal);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-body);
+    line-height: 1.5;
+}

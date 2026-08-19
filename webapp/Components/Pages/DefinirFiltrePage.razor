@@ -1,0 +1,485 @@
+@page "/definir-filtre"
+@inject ClientFilterService FilterSvc
+@inject AssistanteService AssistanteSvc
+@inject CurrentUserService CurrentUser
+
+<PageTitle>Définir un Filtre</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Rechercher et Définir un Filtre</span>
+    @if (Plan == 2)
+    {
+        <div class="actions">
+            @if (CanCreate)
+            {
+                <button class="btn btn-primary" @onclick="OpenSaveModal">Enregistrer le Filtre en Cours</button>
+            }
+            <button class="btn btn-outline" @onclick="() => Plan = 1">Précédent</button>
+        </div>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Plan == 1)
+{
+    <p class="dimmed" style="padding: 8px 16px;">
+        Les dates sont au format « AAAA-MM-JJ ». Les heures sont au format « HH:MM ».
+    </p>
+    <div class="table-wrap" style="overflow-x: auto;">
+        <table class="filter-table" style="width: 100%; min-width: @(TableWidth)px;">
+            <colgroup>
+                <col style="width: 220px;" />
+                <col style="width: 200px;" />
+                <col style="width: 200px;" />
+                @for (var h = 1; h <= ExtraValueColumns; h++)
+                {
+                    <col />
+                }
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Rubrique</th>
+                    <th>Condition</th>
+                    <th>Valeur</th>
+                    @for (var h = 1; h <= ExtraValueColumns; h++)
+                    {
+                        <th>Valeur @(h + 1)</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var f in ClientFilterService.Fields)
+                {
+                    var row = Rows[f.Field];
+                    var isLiaison = row.Operator is not null && ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
+                    <tr>
+                        <td>@f.Label</td>
+                        <td>
+                            <select class="text-input" value="@(row.Operator?.ToString() ?? "")" @onchange="e => OnOperatorChange(f.Field, e)">
+                                <option value="">&lt; Aucune &gt;</option>
+                                @foreach (var op in ClientFilterService.OperatorsByType[f.Type])
+                                {
+                                    <option value="@op">@OperatorLabels[op]</option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            @if (row.Operator is not null)
+                            {
+                                @if (f.Type == FieldType.Boolean)
+                                {
+                                    <select class="text-input" value="@row.Values[0]" @onchange="e => row.Values[0] = e.Value?.ToString() ?? string.Empty">
+                                        <option value="true">Oui</option>
+                                        <option value="false">Non</option>
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input class="text-input" type="@InputType(f.Type)" value="@row.Values[0]"
+                                           @oninput="e => row.Values[0] = e.Value?.ToString() ?? string.Empty" />
+                                }
+                            }
+                        </td>
+                        @for (var col = 1; col <= ExtraValueColumns; col++)
+                        {
+                            var idx = col;
+                            <td class="value-cell">
+                                @if (row.Operator == Operator.Between)
+                                {
+                                    @if (idx == 1)
+                                    {
+                                        @if (f.Type == FieldType.Boolean)
+                                        {
+                                            <select class="text-input" value="@row.Values[1]" @onchange="e => row.Values[1] = e.Value?.ToString() ?? string.Empty">
+                                                <option value="true">Oui</option>
+                                                <option value="false">Non</option>
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <input class="text-input" type="@InputType(f.Type)" value="@row.Values[1]"
+                                                   @oninput="e => row.Values[1] = e.Value?.ToString() ?? string.Empty" />
+                                        }
+                                    }
+                                }
+                                else if (isLiaison && idx < row.Values.Count)
+                                {
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <select class="text-input" style="flex: 0 0 56px; padding: 4px;" title="OU (au moins une des valeurs) ou ET (toutes les valeurs à la fois — n'a de sens qu'avec Différent de / Ne commence pas par / Ne contient pas)"
+                                                value="@row.Liaison" @onchange="e => row.Liaison = e.Value?.ToString() ?? row.Liaison">
+                                            <option value="ou">OU</option>
+                                            <option value="et">ET</option>
+                                        </select>
+                                        @if (f.Type == FieldType.Boolean)
+                                        {
+                                            <select class="text-input" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[idx]" @onchange="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty">
+                                                <option value="true">Oui</option>
+                                                <option value="false">Non</option>
+                                            </select>
+                                        }
+                                        else
+                                        {
+                                            <input class="text-input" style="flex: 1 1 auto; min-width: 0;" type="@InputType(f.Type)" value="@row.Values[idx]"
+                                                   @oninput="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty" />
+                                        }
+                                        <button class="value-btn btn-remove-value" title="Retirer cette valeur"
+                                                @onclick="() => RemoveValue(f.Field, idx)">×</button>
+                                    </div>
+                                }
+                                else if (isLiaison && idx == row.Values.Count)
+                                {
+                                    <button class="value-btn btn-add-value" title="Ajouter une valeur"
+                                            @onclick="() => AddValue(f.Field)">+</button>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="modal-actions" style="padding: 10px 16px; border-top: 1px solid var(--navy-border); margin: 0;">
+        <button class="btn btn-default" @onclick="HandleReset">Réinitialiser</button>
+        <button class="btn btn-primary" disabled="@Searching" @onclick="HandleSearch">Rechercher</button>
+    </div>
+}
+else
+{
+    <p class="count" style="text-align: right;">@Count enregistrement@(Count != 1 ? "s" : "")</p>
+    <div class="table-wrap" style="overflow-x: auto;">
+        <div style="width: @(ResultTotalWidth)px;">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in ResultColumns)
+                {
+                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                }
+            </div>
+            <Virtualize Items="Results" Context="c" ItemSize="34">
+                <div class="row" style="cursor: default;">
+                    @foreach (var col in ResultColumns)
+                    {
+                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                            @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
+                            {
+                                <span class="badge @badgeClass">@c.StatutsClients</span>
+                            }
+                            else
+                            {
+                                @GetResultCellText(c, col.Key)
+                            }
+                        </div>
+                    }
+                </div>
+            </Virtualize>
+        </div>
+    </div>
+}
+</div>
+
+<FiltreDetailModal Opened="SaveModalOpen" OnClose="() => SaveModalOpen = false" Assistantes="Assistantes"
+                    Mode="search-save" InitialFiltreReel="@SaveModalFiltreReel" OnSaved="() => SaveModalOpen = false" />
+
+@code {
+    // Values[0] is always the primary "Valeur" box. For Between it's
+    // exactly a 2-entry (min, max) pair; for the SecondValueLiaison
+    // operators it can grow to however many alternatives the user adds
+    // via the "+" button (AddValue/RemoveValue below); for every other
+    // operator it stays a single entry.
+    private class RowState
+    {
+        public Operator? Operator;
+        public List<string> Values = new() { string.Empty };
+        // User-editable now, not auto-picked and locked — starts at
+        // whatever ClientFilterService.SecondValueLiaison's sensible
+        // default is for the chosen operator (OnOperatorChange sets it),
+        // but Badr wants the ability to override it, accepting that the
+        // "wrong" pairing produces an always-empty or always-everything
+        // condition. His call, not blocked here.
+        public string Liaison = "ou";
+    }
+
+    private static readonly Dictionary<Operator, string> OperatorLabels = new()
+    {
+        [Operator.Eq] = "Egal à",
+        [Operator.Ne] = "Différent de",
+        [Operator.Gt] = "Supérieur à",
+        [Operator.Gte] = "Supérieur ou égal à",
+        [Operator.Lt] = "Inférieur à",
+        [Operator.Lte] = "Inférieur ou égal à",
+        [Operator.Between] = "Entre",
+        [Operator.StartsWith] = "Commence par",
+        [Operator.NotStartsWith] = "Ne commence pas par",
+        [Operator.Contains] = "Contient",
+        [Operator.NotContains] = "Ne contient pas",
+    };
+
+    private record ResultColumnDef(string Key, string Label, int Width);
+
+    private readonly List<ResultColumnDef> ResultColumns = new()
+    {
+        new("famille", "Famille", 140),
+        new("raison_sociale", "Raison Sociale", 200),
+        new("complement", "Complement", 160),
+        new("franchise", "Franchise", 140),
+        new("rue", "Rue", 160),
+        new("localisation_1", "Localisation 1", 140),
+        new("localisation_2", "Localisation 2", 140),
+        new("cp", "Code Postal", 90),
+        new("ville", "Ville", 140),
+        new("pays", "Pays", 120),
+        new("telephone", "Telephone", 110),
+        new("portable", "Portable", 110),
+        new("email", "Email", 180),
+        new("cle_opl", "Cle Opl", 90),
+        new("assistante_commercial", "Assistante Commerciale", 180),
+        new("responsable_achat", "Responsable Achat", 160),
+        new("op_en_cours", "Opération en Cours", 160),
+        new("status_vente", "Status Vente", 140),
+        new("date_saisie", "Date Saisie", 100),
+        new("heure_saisie", "Heure Saisie", 90),
+        new("date_rappel", "Date Rappel", 100),
+        new("heure_rappel", "Heure Rappel", 90),
+        new("note", "Note", 200),
+        new("fax", "Fax", 110),
+        new("representant", "Représentant", 160),
+        new("magasin_principal", "Magasin Principal", 160),
+        new("statuts_clients", "Statuts Clients", 140),
+    };
+
+    private int ResultTotalWidth => ResultColumns.Sum(c => c.Width);
+
+    private readonly Dictionary<string, RowState> Rows =
+        ClientFilterService.Fields.ToDictionary(f => f.Field, f => new RowState());
+
+    // Real columns, not stacked lines inside one cell — Badr's correction.
+    // Table-wide, not per-row: every row renders the same number of
+    // "Valeur N" columns so they all line up, driven by whichever row
+    // currently holds the most values. Always at least 1 so "Valeur 2"
+    // (Between's fixed second box) keeps showing even with nothing added
+    // yet. Recomputed on every render, so adding/removing a value anywhere
+    // grows or shrinks the whole table immediately — no separate state to
+    // keep in sync.
+    private int ExtraValueColumns => Math.Max(1, Rows.Values.Max(r => r.Values.Count));
+
+    // 280px minimum — this column has to fit an OU/ET select (56px) *and*
+    // a × button (26px) *and* the actual value box, not just one control.
+    // At a flat 200px the value input measured at just 82px wide — real
+    // values like "Opticien FRANCE" don't fit.
+    private const int ExtraColWidth = 280;
+
+    // Fourth rewrite of this table's layout. Flex (independently styled
+    // header/body cells), then CSS Grid with `1fr` (independently computed
+    // leftover-space distribution per row), then CSS Grid with flat
+    // pixels — Badr kept seeing a real column-alignment gap on his own
+    // machine past ~6 values that survived every one of those and that
+    // this session could never reproduce, hard refresh included. All
+    // three of those approaches share one trait: header and body are
+    // *separate* boxes that the browser lays out independently and that
+    // just *happen* to agree, because their sizing inputs matched. A real
+    // HTML <table> with <colgroup> (see the markup above, and
+    // DefinirFiltrePage.razor.css) doesn't have that failure mode at
+    // all — column widths are declared exactly once, table-wide, and
+    // honoring that across every row is what a browser's table layout
+    // algorithm is actually built to guarantee, on every browser, at
+    // every zoom level. This is the first version of this table that
+    // isn't a hand-simulated approximation of one.
+    //
+    // `table-layout: fixed` alone isn't enough — without an explicit
+    // width on the <table> itself, the browser shrinks *every* <col>
+    // proportionally to fit whatever container width is available
+    // (confirmed directly: columns specified at 220/200/200/280 rendered
+    // at 201/165/158/233 — same ratios, scaled down).
+    //
+    // `width: 100%; min-width: @TableWidth px` (not a flat pixel width)
+    // is what brings back "fills a wide screen" without reintroducing the
+    // cramped-column bug this whole rewrite was chasing: Rubrique/
+    // Condition/Valeur keep an explicit <col> width, but the "Valeur N"
+    // <col> elements are left with *no* width at all on purpose. Per the
+    // CSS 2.1 fixed-table-layout algorithm, columns without an explicit
+    // width equally split whatever's left after the explicitly-sized ones
+    // are subtracted — real spec behavior, not a hand-rolled distribution
+    // like the old `1fr` attempt, and computed once for the whole
+    // <table> rather than once per row, so there's nothing left for the
+    // header and body to independently disagree about. On a screen wider
+    // than TableWidth, `width: 100%` wins and those columns grow evenly
+    // past 280px to fill it; on a narrower one, `min-width` wins, the
+    // browser can't shrink an unspecified-width column below its fair
+    // share of that floor, and `.table-wrap`'s `overflow-x: auto` takes
+    // over exactly like before.
+    private int TableWidth => 220 + 200 + 200 + ExtraValueColumns * ExtraColWidth;
+
+    private int Plan = 1;
+    private List<FranceOptique> Results = new();
+    private int Count;
+    private bool Searching;
+    private string? Error;
+
+    private List<string> Assistantes = new();
+    private bool SaveModalOpen;
+    private string SaveModalFiltreReel = string.Empty;
+    private bool CanCreate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CanCreate = await CurrentUser.CanCreateFiltersAsync();
+
+        try
+        {
+            Assistantes = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    private static string InputType(FieldType type) => type switch
+    {
+        FieldType.Date => "date",
+        FieldType.Time => "time",
+        FieldType.Number => "number",
+        _ => "text",
+    };
+
+    private void OnOperatorChange(string field, ChangeEventArgs e)
+    {
+        var row = Rows[field];
+        var val = e.Value?.ToString();
+        row.Operator = string.IsNullOrEmpty(val) ? null : Enum.Parse<Operator>(val);
+        // Between is always exactly a (min, max) pair; every other operator
+        // starts back at a single empty value — matches the previous
+        // behavior of clearing both boxes on operator change.
+        row.Values = row.Operator == Operator.Between ? new() { "", "" } : new() { "" };
+        // Reset to the sensible default for the newly-picked operator —
+        // still overridable afterward via the dropdown next to each value,
+        // just not sticky across an operator change (an "et" left over
+        // from Différent de would silently make a fresh Egal à condition
+        // always-empty).
+        row.Liaison = row.Operator is not null && ClientFilterService.SecondValueLiaison.TryGetValue(row.Operator.Value, out var defaultLiaison)
+            ? defaultLiaison
+            : "ou";
+    }
+
+    // Only reachable for the SecondValueLiaison operators (the "+" button
+    // isn't rendered otherwise) — Between's two boxes are fixed, not
+    // extendable, so this never needs to touch it.
+    private void AddValue(string field) => Rows[field].Values.Add(string.Empty);
+
+    private void RemoveValue(string field, int index) => Rows[field].Values.RemoveAt(index);
+
+    private List<Condition> BuildConditions()
+    {
+        var result = new List<Condition>();
+        foreach (var f in ClientFilterService.Fields)
+        {
+            var row = Rows[f.Field];
+            if (row.Operator is null) continue;
+            if (string.IsNullOrWhiteSpace(row.Values[0])) continue;
+
+            if (row.Operator == Operator.Between)
+            {
+                if (row.Values.Count < 2 || string.IsNullOrWhiteSpace(row.Values[1])) continue;
+                result.Add(new Condition { Field = f.Field, Operator = row.Operator.Value, Values = new() { row.Values[0], row.Values[1] } });
+                continue;
+            }
+
+            // Blank "extra" boxes (added via "+" then left empty) are
+            // dropped rather than treated as an error — a user shouldn't
+            // have to remove an unused box before searching.
+            var values = new List<string> { row.Values[0] };
+            var isLiaisonOp = ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
+            if (isLiaisonOp)
+            {
+                values.AddRange(row.Values.Skip(1).Where(v => !string.IsNullOrWhiteSpace(v)));
+            }
+            result.Add(new Condition
+            {
+                Field = f.Field,
+                Operator = row.Operator.Value,
+                Values = values,
+                Liaison = isLiaisonOp ? row.Liaison : null,
+            });
+        }
+        return result;
+    }
+
+    private void HandleReset()
+    {
+        foreach (var f in ClientFilterService.Fields)
+        {
+            Rows[f.Field] = new RowState();
+        }
+    }
+
+    private async Task HandleSearch()
+    {
+        Searching = true;
+        Error = null;
+        try
+        {
+            var (rows, count) = await FilterSvc.SearchAsync(BuildConditions());
+            Results = rows;
+            Count = count;
+            Plan = 2;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Searching = false;
+        }
+    }
+
+    private void OpenSaveModal()
+    {
+        SaveModalFiltreReel = ClientFilterService.BuildLegacyFiltreReel(BuildConditions());
+        SaveModalOpen = true;
+    }
+
+    private static string GetResultCellText(FranceOptique c, string key) => key switch
+    {
+        "famille" => c.Famille ?? "",
+        "raison_sociale" => c.RaisonSociale ?? "",
+        "complement" => c.Complement ?? "",
+        "franchise" => c.Franchise ?? "",
+        "rue" => c.Rue ?? "",
+        "localisation_1" => c.Localisation1 ?? "",
+        "localisation_2" => c.Localisation2 ?? "",
+        "cp" => c.Cp ?? "",
+        "ville" => c.Ville ?? "",
+        "pays" => c.Pays ?? "",
+        "telephone" => c.Telephone ?? "",
+        "portable" => c.Portable ?? "",
+        "email" => c.Email ?? "",
+        "cle_opl" => c.CleOpl.ToString(),
+        "assistante_commercial" => c.AssistanteCommercial ?? "",
+        "responsable_achat" => c.ResponsableAchat ?? "",
+        "op_en_cours" => c.OpEnCours ?? "",
+        "status_vente" => c.StatusVente ?? "",
+        "date_saisie" => c.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "heure_saisie" => c.HeureSaisie?.ToString("HH:mm") ?? "",
+        "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
+        "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
+        "note" => c.Note ?? "",
+        "fax" => c.Fax ?? "",
+        "representant" => c.Representant ?? "",
+        "magasin_principal" => c.MagasinPrincipal ?? "",
+        "statuts_clients" => c.StatutsClients ?? "",
+        _ => "",
+    };
+
+    private static string StatutBadgeClass(string? statut) => statut switch
+    {
+        "Payés" => "badge-success",
+        "Impayés" => "badge-warning",
+        "Bloqués" => "badge-danger",
+        _ => "",
+    };
+}

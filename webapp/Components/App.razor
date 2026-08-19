@@ -5,14 +5,26 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <link rel="stylesheet" href="app.css" />
-    <link rel="stylesheet" href="MafaliCrm.Web.styles.css" />
+    <link rel="stylesheet" href="@($"app.css?v={CacheBuster}")" />
+    <link rel="stylesheet" href="@($"MafaliCrm.Web.styles.css?v={CacheBuster}")" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
     <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
+    <script src="@($"app.js?v={CacheBuster}")"></script>
 </body>
 
 </html>
+
+@code {
+    // Browsers cache static files aggressively since none of these are
+    // served with an explicit Cache-Control header — without this, a CSS or
+    // JS change can keep serving stale content to an already-open tab (or
+    // even a fresh one, since HTTP cache is shared across tabs) past a
+    // server restart, until something forces the URL itself to change.
+    // Computed once per process lifetime, not per request — stable during a
+    // run, guaranteed different after every restart/deploy.
+    private static readonly string CacheBuster = Guid.NewGuid().ToString("N")[..8];
+}

@@ -54,7 +54,7 @@ else
 }
 </div>
 
-@if (ModalOpen)
+@if (ModalOpen && !ConflictDialogOpen)
 {
     <div class="modal-backdrop" @onclick="CloseModal">
         <div class="modal" @onclick:stopPropagation="true">
@@ -75,6 +75,32 @@ else
             <div class="modal-actions">
                 <button class="btn btn-default" @onclick="CloseModal">Annuler</button>
                 <button class="btn btn-primary" disabled="@Submitting" @onclick="SubmitModal">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ConflictDialogOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConflictDialogOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Conflit détecté</h3>
+            <p class="confirm-text">
+                Ce pays a été modifié par quelqu'un d'autre pendant que vous le modifiiez.
+                Voici les champs concernés :
+            </p>
+            <div class="conflict-list">
+                @foreach (var c in Conflicts)
+                {
+                    <div class="conflict-row">
+                        <span class="conflict-field">@c.Field</span>
+                        <span class="conflict-values">Vous : @c.MyValue — Actuel : @c.CurrentValue</span>
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="ReloadAfterConflict">Recharger</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ForceApply">Écraser quand même</button>
             </div>
         </div>
     </div>
@@ -109,6 +135,9 @@ else
     private string FormMasque = string.Empty;
     private string? ModalError;
     private bool Submitting;
+    private PaysInput? Baseline;
+    private bool ConflictDialogOpen;
+    private List<FieldConflict> Conflicts = new();
 
     private List<PaysModel> Filtered =>
         string.IsNullOrWhiteSpace(SearchTerm)
@@ -128,7 +157,7 @@ else
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -163,13 +192,37 @@ else
         FormNomPays = current.NomPays;
         FormIndicatif = current.Indicatif ?? string.Empty;
         FormMasque = current.Masque ?? string.Empty;
+        Baseline = PaysInput.FromEntity(current);
         ModalError = null;
         ModalOpen = true;
     }
 
     private void CloseModal() => ModalOpen = false;
 
-    private async Task SubmitModal()
+    private Task SubmitModal() => SaveAsync(force: false);
+
+    // Retry after the user has seen the conflict list and explicitly chose
+    // to overwrite anyway.
+    private Task ForceApply()
+    {
+        ConflictDialogOpen = false;
+        return SaveAsync(force: true);
+    }
+
+    private async Task ReloadAfterConflict()
+    {
+        ConflictDialogOpen = false;
+        Conflicts = new();
+        Items = await PaysSvc.ListAsync();
+        var current = Items.FirstOrDefault(p => p.IdPays == EditingId);
+        if (current is null) return;
+        FormNomPays = current.NomPays;
+        FormIndicatif = current.Indicatif ?? string.Empty;
+        FormMasque = current.Masque ?? string.Empty;
+        Baseline = PaysInput.FromEntity(current);
+    }
+
+    private async Task SaveAsync(bool force)
     {
         var trimmed = FormNomPays.Trim();
         if (trimmed.Length == 0)
@@ -186,7 +239,15 @@ else
         {
             if (IsEditMode)
             {
-                await PaysSvc.UpdateAsync(EditingId, trimmed, indicatif, masque);
+                if (Baseline is null) return;
+                var current = new PaysInput { NomPays = trimmed, Indicatif = indicatif, Masque = masque };
+                var result = await PaysSvc.UpdateWithConflictCheckAsync(EditingId, Baseline, current, force);
+                if (!result.Success)
+                {
+                    Conflicts = result.Conflicts;
+                    ConflictDialogOpen = true;
+                    return;
+                }
             }
             else
             {
@@ -197,7 +258,7 @@ else
         }
         catch (Exception ex)
         {
-            ModalError = ex.Message;
+            ModalError = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -227,7 +288,7 @@ else
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
     }
 }

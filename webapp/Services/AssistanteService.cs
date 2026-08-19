@@ -1,9 +1,24 @@
 using MafaliCrm.Web.Data;
 using MafaliCrm.Web.Models;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace MafaliCrm.Web.Services;
+
+public class AssistanteInput
+{
+    public string PrenomNom { get; set; } = string.Empty;
+    public string? Service { get; set; }
+    public bool AllFiltres { get; set; }
+    public string? Commentaire { get; set; }
+
+    public static AssistanteInput FromEntity(Assistante a) => new()
+    {
+        PrenomNom = a.PrenomNom,
+        Service = a.Service,
+        AllFiltres = a.AllFiltres,
+        Commentaire = a.Commentaire,
+    };
+}
 
 // Correction from what the Familles/Pays comments originally claimed: this
 // was tried first with plain mutate-tracked-entity-then-SaveChanges, on the
@@ -50,21 +65,43 @@ public class AssistanteService
         await SaveOrThrowFriendly(db);
     }
 
-    public async Task UpdateAsync(string currentPrenomNom, string newPrenomNom, string? service, bool allFiltres, string? commentaire)
+    private static readonly Dictionary<string, string> AssistanteFieldLabels = new()
+    {
+        [nameof(AssistanteInput.PrenomNom)] = "Prénom Nom",
+        [nameof(AssistanteInput.Service)] = "Service",
+        [nameof(AssistanteInput.AllFiltres)] = "Accès à tous les Filtres",
+        [nameof(AssistanteInput.Commentaire)] = "Commentaire",
+    };
+
+    // currentPrenomNom is the real primary key as it was when the caller
+    // started editing — used both to fetch the fresh row for the conflict
+    // check and to anchor the ExecuteUpdateAsync WHERE clause. Renaming
+    // PrenomNom is itself one of the fields the conflict check protects.
+    public async Task<ApplyResult> UpdateWithConflictCheckAsync(string currentPrenomNom, AssistanteInput baseline, AssistanteInput current, bool force = false)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
+        var fresh = await db.Assistantes.AsNoTracking().FirstOrDefaultAsync(a => a.PrenomNom == currentPrenomNom)
+            ?? throw new InvalidOperationException("Assistante introuvable.");
+        var merged = AssistanteInput.FromEntity(fresh);
+        var conflicts = ConflictCheck.Apply(baseline, current, merged, force, AssistanteFieldLabels);
+
+        if (conflicts.Count > 0)
+        {
+            return new ApplyResult { Success = false, Conflicts = conflicts };
+        }
+
         int affected;
         try
         {
             affected = await db.Assistantes
                 .Where(a => a.PrenomNom == currentPrenomNom)
                 .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(a => a.PrenomNom, newPrenomNom)
-                    .SetProperty(a => a.Service, service)
-                    .SetProperty(a => a.AllFiltres, allFiltres)
-                    .SetProperty(a => a.Commentaire, commentaire));
+                    .SetProperty(a => a.PrenomNom, merged.PrenomNom)
+                    .SetProperty(a => a.Service, merged.Service)
+                    .SetProperty(a => a.AllFiltres, merged.AllFiltres)
+                    .SetProperty(a => a.Commentaire, merged.Commentaire));
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (FriendlyError.IsUniqueViolation(ex))
         {
             throw new InvalidOperationException("Cette assistante existe déjà.");
         }
@@ -73,6 +110,8 @@ public class AssistanteService
         {
             throw new InvalidOperationException("Assistante introuvable.");
         }
+
+        return new ApplyResult { Success = true };
     }
 
     public async Task DeleteAsync(string prenomNom)
@@ -90,13 +129,9 @@ public class AssistanteService
         {
             await db.SaveChangesAsync();
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (FriendlyError.IsUniqueViolation(ex))
         {
             throw new InvalidOperationException("Cette assistante existe déjà.");
         }
     }
-
-    private static bool IsUniqueViolation(Exception ex) =>
-        ex is PostgresException { SqlState: "23505" } ||
-        ex.InnerException is PostgresException { SqlState: "23505" };
 }

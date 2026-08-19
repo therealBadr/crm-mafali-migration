@@ -1,0 +1,65 @@
+@page "/historique-connexions"
+@attribute [Authorize(Roles = "admin")]
+@inject UserService UserSvc
+
+<PageTitle>Historique des Connexions</PageTitle>
+
+@* Simplified replacement for the legacy GPWHistoriqueConnexion — no graph,
+   no date-range filter, no "wipe entire history" button (Risk Register
+   #24). Successful logins only, most recent first, capped at 200 rows —
+   see UserService.GetLoginHistoryAsync and database/06_login_history.sql. *@
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Historique des Connexions</span>
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="table-wrap">
+        <div class="header-row">
+            <div class="cell">Login</div>
+            <div class="cell" style="flex: 0 0 200px;">Date et Heure</div>
+        </div>
+        @foreach (var h in Items)
+        {
+            <div class="row" style="cursor: default;">
+                <div class="cell">@h.Login</div>
+                <div class="cell" style="flex: 0 0 200px;">@h.LoggedInAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+            </div>
+        }
+    </div>
+    <p class="count">@Items.Count enregistrements (200 max.)</p>
+}
+</div>
+
+@code {
+    private List<LoginHistory> Items = new();
+    private bool Loading = true;
+    private string? Error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Items = await UserSvc.GetLoginHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+}

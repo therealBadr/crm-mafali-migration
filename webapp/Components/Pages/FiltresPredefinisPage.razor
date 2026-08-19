@@ -1,0 +1,386 @@
+@page "/filtres-predefinis"
+@inject AssistanteService AssistanteSvc
+@inject FiltreOperatriceService FiltreSvc
+@inject ClientFilterService ClientFilterSvc
+@inject HistoriqueService HistoriqueSvc
+@inject NavigationManager Nav
+@inject CurrentUserService CurrentUser
+
+@* Mirrors the real Fen_Filtre ("Filtres prédéfinis"): pick a saved filter,
+   see who matches, click a client to see their history below. One thing
+   deliberately differs from the legacy window, confirmed with Badr:
+   - "Travailler sur les enregistrements" opens Fen_Parcours_Client in the
+     legacy — that window doesn't exist in this app yet, so the button stays
+     visibly present but disabled until it does.
+
+   The Assistante picker is now scoped by real login (2026-08-14, see
+   PROGRESS.md) instead of the free picker this page originally shipped with
+   before auth existed: Admin/Assistant can still pick any operator;
+   Commercial is locked to their own name — the dropdown is disabled and
+   pre-selected rather than removed, so the layout doesn't shift per role. *@
+
+<PageTitle>Filtres Prédéfinis</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Filtres Prédéfinis</span>
+</div>
+
+<div class="search-bar" style="flex-wrap: wrap; row-gap: 8px;">
+    <label style="font-size: 13px; color: var(--header-text);">Assistante :</label>
+    <select class="search-input" style="min-width: 200px;" value="@SelectedAssistante" disabled="@(!CanViewAll)" @onchange="OnAssistanteChange">
+        <option value="">Sélectionner…</option>
+        @foreach (var a in Assistantes)
+        {
+            <option value="@a">@a</option>
+        }
+    </select>
+
+    <label style="font-size: 13px; color: var(--header-text);">Filtre :</label>
+    <select class="search-input" style="min-width: 220px;" value="@SelectedFiltreNom" disabled="@(SelectedAssistante is null)" @onchange="OnFiltreChange">
+        <option value="">&lt; Aucun &gt;</option>
+        @foreach (var f in Filtres)
+        {
+            <option value="@f.NomFiltre">@f.NomFiltre</option>
+        }
+    </select>
+
+    <button class="btn btn-primary" disabled="@(SelectedFiltreNom is null || Results.Count == 0)" @onclick="OpenParcours">
+        Travailler sur les enregistrements
+    </button>
+
+    <label class="checkbox-label" style="margin-bottom: 0;">
+        <input type="checkbox" @bind="ModifierEnregistrement" />
+        Modifier Enregistrement
+    </label>
+
+    @if (SelectedFiltreNom is not null)
+    {
+        <span class="result-count" style="font-weight: 600; color: var(--teal-active);">
+            @Count Client(s) pour le filtre sélectionné.
+        </span>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="table-wrap" style="flex: 3 1 0; overflow-x: auto;">
+        <div style="width: @(ClientTotalWidth)px;">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in ClientColumns)
+                {
+                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                }
+            </div>
+            <Virtualize Items="Results" Context="c" ItemSize="34">
+                <div class="row @(c.CleOpl == SelectedClient ? "selected" : "")"
+                     @onclick="() => SelectClient(c.CleOpl)"
+                     @ondblclick="() => OpenEditIfAllowed(c.CleOpl)">
+                    @foreach (var col in ClientColumns)
+                    {
+                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                            @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
+                            {
+                                <span class="badge @badgeClass">@c.StatutsClients</span>
+                            }
+                            else
+                            {
+                                @GetClientCellText(c, col.Key)
+                            }
+                        </div>
+                    }
+                </div>
+            </Virtualize>
+        </div>
+    </div>
+
+    <div style="flex: 2 1 0; min-height: 0; display: flex; flex-direction: column; border-top: 2px solid var(--navy-border); overflow: auto;">
+        <div style="width: @(HistoTotalWidth)px;">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in HistoColumns)
+                {
+                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                }
+            </div>
+            @if (SelectedClient is null)
+            {
+                <p class="dimmed">Sélectionnez un client pour voir son historique.</p>
+            }
+            else
+            {
+                <Virtualize Items="SelectedHistorique" Context="h" ItemSize="34">
+                    <div class="row" style="cursor: default;">
+                        @foreach (var col in HistoColumns)
+                        {
+                            <div class="cell" style="flex: 0 0 @(col.Width)px;">@GetHistoCellText(h, col.Key)</div>
+                        }
+                    </div>
+                </Virtualize>
+            }
+        </div>
+    </div>
+}
+</div>
+
+@code {
+    private record ColumnDef(string Key, string Label, int Width);
+
+    // Exact order/set from the real Fen_Filtre window doc (33 columns).
+    private readonly List<ColumnDef> ClientColumns = new()
+    {
+        new("cle_opl", "N° Client", 80),
+        new("famille", "Famille", 140),
+        new("raison_sociale", "Raison Sociale", 200),
+        new("complement", "Complement", 160),
+        new("franchise", "Franchise", 140),
+        new("franchise2", "Franchise 2", 140),
+        new("franchise3", "Franchise 3", 140),
+        new("franchise4", "Franchise 4", 140),
+        new("rue", "Rue", 160),
+        new("localisation_1", "Localisation 1", 140),
+        new("localisation_2", "Localisation 2", 140),
+        new("cp", "Code Postal", 90),
+        new("ville", "Ville", 140),
+        new("pays", "Pays", 120),
+        new("telephone", "Telephone", 110),
+        new("portable", "Portable", 110),
+        new("email", "Email", 180),
+        new("assistante_commercial", "Assistante Commerciale", 180),
+        new("responsable_achat", "Responsable Achat", 160),
+        new("op_en_cours", "Opération en Cours", 160),
+        new("status_vente", "Status Vente", 140),
+        new("date_saisie", "Date Saisie", 100),
+        new("heure_saisie", "Heure Saisie", 90),
+        new("date_rappel", "Date Rappel", 100),
+        new("heure_rappel", "Heure Rappel", 90),
+        new("note", "Note", 200),
+        new("fax", "Fax", 110),
+        new("representant", "Représentant", 160),
+        new("magasin_principal", "Magasin Principal", 160),
+        new("statuts_clients", "Statuts Clients", 140),
+        new("tel_bis", "Telephone Bis", 110),
+        new("note_perm", "Note Permanente", 200),
+        new("etat_client", "État Client", 120),
+    };
+
+    private readonly List<ColumnDef> HistoColumns = new()
+    {
+        new("date_saisie", "Date Saisie", 100),
+        new("heure_saisie", "Heure Saisie", 90),
+        new("assistante_commercial", "Assistante Commerciale", 180),
+        new("date_rappel", "Date Rappel", 100),
+        new("heure_rappel", "Heure Rappel", 90),
+        new("operation", "Opération", 220),
+        new("status_vente", "Status Vente", 140),
+        new("note", "Note", 260),
+    };
+
+    private int ClientTotalWidth => ClientColumns.Sum(c => c.Width);
+    private int HistoTotalWidth => HistoColumns.Sum(c => c.Width);
+
+    private List<string> Assistantes = new();
+    private string? SelectedAssistante;
+
+    private List<FiltreOperatrice> Filtres = new();
+    private string? SelectedFiltreNom;
+
+    private List<FranceOptique> Results = new();
+    private int Count;
+    private long? SelectedClient;
+    private List<Historique> SelectedHistorique = new();
+
+    private bool ModifierEnregistrement;
+    private bool Loading;
+    private string? Error;
+
+    private bool CanViewAll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CanViewAll = await CurrentUser.CanViewAllFiltersAsync();
+        var currentLogin = await CurrentUser.GetLoginAsync();
+
+        try
+        {
+            Assistantes = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+
+        // Commercial can't browse anyone else's filters — lock the picker
+        // to their own name and load it immediately instead of waiting for
+        // a selection that isn't really a choice.
+        if (!CanViewAll && currentLogin is not null)
+        {
+            Assistantes = new List<string> { currentLogin };
+            await SelectAssistante(currentLogin);
+        }
+    }
+
+    private async Task OnAssistanteChange(ChangeEventArgs e)
+    {
+        var value = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString();
+        await SelectAssistante(value);
+    }
+
+    private async Task SelectAssistante(string? assistante)
+    {
+        SelectedAssistante = assistante;
+        SelectedFiltreNom = null;
+        Results = new();
+        Count = 0;
+        SelectedClient = null;
+        SelectedHistorique = new();
+        Filtres = new();
+        Error = null;
+
+        if (SelectedAssistante is null) return;
+
+        try
+        {
+            Filtres = await FiltreSvc.ListByOperatorAsync(SelectedAssistante);
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    private async Task OnFiltreChange(ChangeEventArgs e)
+    {
+        var nom = e.Value?.ToString();
+        SelectedFiltreNom = string.IsNullOrEmpty(nom) ? null : nom;
+        Results = new();
+        Count = 0;
+        SelectedClient = null;
+        SelectedHistorique = new();
+        Error = null;
+
+        if (SelectedFiltreNom is null) return;
+
+        var filtre = Filtres.FirstOrDefault(f => f.NomFiltre == SelectedFiltreNom);
+        if (filtre is null) return;
+
+        Loading = true;
+        try
+        {
+            (Results, Count) = await ClientFilterSvc.SearchByFiltreReelAsync(filtre.FiltreReel ?? "");
+        }
+        catch (FormatException)
+        {
+            Error = "Ce filtre contient une syntaxe non reconnue et ne peut pas être exécuté pour le moment. Contactez un administrateur pour le corriger.";
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task SelectClient(long cleOpl)
+    {
+        SelectedClient = cleOpl;
+        try
+        {
+            SelectedHistorique = await HistoriqueSvc.GetForClientAsync(cleOpl);
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    private void OpenEditIfAllowed(long cleOpl)
+    {
+        if (!ModifierEnregistrement) return;
+        Nav.NavigateTo($"/clients/{cleOpl}/edit");
+    }
+
+    private void OpenParcours()
+    {
+        if (SelectedFiltreNom is null || Results.Count == 0) return;
+        var start = SelectedClient ?? Results[0].CleOpl;
+        var assistante = Uri.EscapeDataString(SelectedAssistante ?? "");
+        var filtre = Uri.EscapeDataString(SelectedFiltreNom);
+        Nav.NavigateTo($"/parcours-client?mode=filtre&assistante={assistante}&filtre={filtre}&start={start}");
+    }
+
+    private static string GetClientCellText(FranceOptique c, string key) => key switch
+    {
+        "cle_opl" => c.CleOpl.ToString(),
+        "famille" => c.Famille ?? "",
+        "raison_sociale" => c.RaisonSociale ?? "",
+        "complement" => c.Complement ?? "",
+        "franchise" => c.Franchise ?? "",
+        "franchise2" => c.Franchise2 ?? "",
+        "franchise3" => c.Franchise3 ?? "",
+        "franchise4" => c.Franchise4 ?? "",
+        "rue" => c.Rue ?? "",
+        "localisation_1" => c.Localisation1 ?? "",
+        "localisation_2" => c.Localisation2 ?? "",
+        "cp" => c.Cp ?? "",
+        "ville" => c.Ville ?? "",
+        "pays" => c.Pays ?? "",
+        "telephone" => c.Telephone ?? "",
+        "portable" => c.Portable ?? "",
+        "email" => c.Email ?? "",
+        "assistante_commercial" => c.AssistanteCommercial ?? "",
+        "responsable_achat" => c.ResponsableAchat ?? "",
+        "op_en_cours" => c.OpEnCours ?? "",
+        "status_vente" => c.StatusVente ?? "",
+        "date_saisie" => c.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "heure_saisie" => c.HeureSaisie?.ToString("HH:mm") ?? "",
+        "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
+        "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
+        "note" => c.Note ?? "",
+        "fax" => c.Fax ?? "",
+        "representant" => c.Representant ?? "",
+        "magasin_principal" => c.MagasinPrincipal ?? "",
+        "statuts_clients" => c.StatutsClients ?? "",
+        "tel_bis" => c.TelBis ?? "",
+        "note_perm" => c.NotePerm ?? "",
+        "etat_client" => c.EtatClient switch
+        {
+            "1" => "Client",
+            "2" => "Prospect",
+            _ => "Non défini",
+        },
+        _ => "",
+    };
+
+    private static string StatutBadgeClass(string? statut) => statut switch
+    {
+        "Payés" => "badge-success",
+        "Impayés" => "badge-warning",
+        "Bloqués" => "badge-danger",
+        _ => "",
+    };
+
+    private static string GetHistoCellText(Historique h, string key) => key switch
+    {
+        "date_saisie" => h.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "heure_saisie" => h.HeureSaisie?.ToString("HH:mm") ?? "",
+        "assistante_commercial" => h.AssistanteCommercial ?? "",
+        "date_rappel" => h.DateRappel?.ToString("dd/MM/yyyy") ?? "",
+        "heure_rappel" => h.HeureRappel?.ToString("HH:mm") ?? "",
+        "operation" => h.Operation ?? "",
+        "status_vente" => h.StatusVente ?? "",
+        "note" => h.Note ?? "",
+        _ => "",
+    };
+}

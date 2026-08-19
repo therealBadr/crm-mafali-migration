@@ -1,0 +1,75 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout Layout.BlankLayout
+
+<PageTitle>Connexion</PageTitle>
+
+@*
+    This form deliberately does NOT use Blazor's EditForm/@onsubmit — a plain
+    HTML <form method="post"> triggers a real browser navigation to the
+    /login minimal API endpoint in Program.cs, outside the Blazor Server
+    SignalR circuit. That's required here: HttpContext.SignInAsync needs a
+    live, writable HTTP response, which no longer exists once this page's
+    circuit is running. See Program.cs's /login endpoint for the full note.
+
+    No <AntiforgeryToken /> here deliberately — reproduced a real crash from
+    it: ASP.NET Core binds an antiforgery token to whatever identity is
+    authenticated when the token is generated, so revisiting /login while
+    already logged in (an ordinary case — a bookmark, a second tab) mints a
+    token tied to the current user, which the framework then rejects as
+    "meant for a different claims-based user" on submit. The endpoint uses
+    .DisableAntiforgery() to match. Login-CSRF is low-severity for an
+    internal tool (worst case: a tricked browser ends up logged into someone
+    else's account, no data loss) — not worth carrying the complexity of
+    correctly resyncing antiforgery state across sign-in transitions for.
+
+    First login for any seeded account has no password set yet (see
+    database/05_users_and_roles.sql) — whatever's typed here becomes that
+    account's password. This is a deliberate simplification of the legacy
+    GPWLogin's separate password/confirm-password fields: worth a confirm
+    field later if mistyped-first-password turns out to be a real problem,
+    not building it preemptively.
+*@
+
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-brand">
+            <div class="login-mark">M</div>
+            <div>
+                <h1>Mafali CRM</h1>
+                <p class="login-sub">Connexion</p>
+            </div>
+        </div>
+
+        @if (Error == "invalid")
+        {
+            <div class="alert">Login ou mot de passe incorrect.</div>
+        }
+        else if (Error == "inactive")
+        {
+            <div class="alert">Ce compte est désactivé.</div>
+        }
+
+        <form method="post" action="login">
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+            <label for="login">Login</label>
+            <input class="text-input" type="text" id="login" name="login" required autofocus />
+
+            <label for="password">Mot de passe</label>
+            <input class="text-input" type="password" id="password" name="password" required />
+
+            <button class="btn btn-primary" type="submit" style="width: 100%; margin-top: 8px;">
+                Se connecter
+            </button>
+        </form>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? Error { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+}

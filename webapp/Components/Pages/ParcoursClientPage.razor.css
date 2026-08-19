@@ -1,0 +1,142 @@
+.pc-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.pc-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--navy);
+}
+
+.pc-topbar-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pc-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8f1fb;
+    margin-right: 4px;
+}
+
+.pc-topbar label {
+    font-size: 12px;
+    color: #cfe0f2;
+    white-space: nowrap;
+}
+
+.pc-id {
+    width: 90px;
+    margin-bottom: 0;
+}
+
+.pc-select-sm {
+    width: 130px;
+    margin-bottom: 0;
+}
+
+.pc-position {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.pc-goto {
+    width: 64px;
+    margin-bottom: 0;
+    text-align: center;
+}
+
+.pc-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    gap: 20px;
+    padding: 16px;
+}
+
+.pc-col {
+    flex: 1;
+    min-width: 260px;
+}
+
+.pc-col-title {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--navy);
+    border-bottom: 2px solid var(--teal);
+    padding-bottom: 6px;
+}
+
+.pc-field {
+    margin-bottom: 10px;
+}
+
+.pc-field label {
+    display: block;
+    font-size: 12px;
+    color: var(--header-text);
+    margin-bottom: 3px;
+}
+
+.pc-field-row {
+    display: flex;
+    gap: 10px;
+}
+
+.pc-field-row .pc-field {
+    flex: 1;
+}
+
+.pc-ca-panel {
+    border: 1px solid var(--border-light);
+    border-radius: 4px;
+    padding: 10px;
+    background: var(--header-bg);
+}
+
+.pc-ca-list {
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.pc-ca-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.pc-ca-row:last-child {
+    border-bottom: none;
+}
+
+.pc-actions {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border-light);
+    background: var(--header-bg);
+}
+
+.pc-histo {
+    height: 260px;
+    flex: none;
+    border-top: 2px solid var(--navy-border);
+}

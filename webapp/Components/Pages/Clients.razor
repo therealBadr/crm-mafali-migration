@@ -1,6 +1,10 @@
 @page "/clients"
 @inject ClientService ClientSvc
+@inject ClientImportExportService ImportExportSvc
+@inject CurrentUserService CurrentUserSvc
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Clients</PageTitle>
 
@@ -11,6 +15,14 @@
         <button class="btn btn-primary" @onclick="OpenCreate">Nouveau</button>
         <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
         <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenDeleteConfirm">Supprimer</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="() => OpenParcours(Selected)">Parcours Client</button>
+        <button class="btn btn-outline" disabled="@ExportingOrImporting" @onclick="Export">Exporter</button>
+        @if (IsAdmin)
+        {
+            <label class="btn btn-outline" for="import-file-input"
+                   style="@(ExportingOrImporting ? "opacity:0.55;cursor:not-allowed;pointer-events:none;" : "")">Importer</label>
+            <InputFile id="import-file-input" style="display:none" OnChange="HandleImportFile" accept=".xlsx" />
+        }
     </div>
 </div>
 
@@ -41,17 +53,30 @@ else
 {
     <div class="table-wrap" style="overflow-x: auto;">
         <div style="width: @(TotalWidth)px;">
-            <div class="header-row" style="position: sticky; top: 0;">
+            <div class="header-row" style="position: sticky; top: 0;" @ref="HeaderRowRef">
                 @foreach (var col in Columns)
                 {
-                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                        @col.Label
+                        <span class="col-resize-handle" data-col-key="@col.Key"></span>
+                    </div>
                 }
             </div>
             <Virtualize Items="Filtered" Context="c" ItemSize="34">
-                <div class="row @(c.CleOpl == Selected ? "selected" : "")" @onclick="() => Select(c.CleOpl)">
+                <div class="row @(c.CleOpl == Selected ? "selected" : "")"
+                     @onclick="() => Select(c.CleOpl)" @ondblclick="() => OpenParcours(c.CleOpl)">
                     @foreach (var col in Columns)
                     {
-                        <div class="cell" style="flex: 0 0 @(col.Width)px;">@GetCellText(c, col.Key)</div>
+                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                            @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
+                            {
+                                <span class="badge @badgeClass">@c.StatutsClients</span>
+                            }
+                            else
+                            {
+                                @GetCellText(c, col.Key)
+                            }
+                        </div>
                     }
                 </div>
             </Virtualize>
@@ -60,6 +85,39 @@ else
     <p class="count">@Items.Count enregistrements</p>
 }
 </div>
+
+@if (ImportResultOpen && ImportSummary is not null)
+{
+    <div class="modal-backdrop" @onclick="() => ImportResultOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Résultat de l'import</h3>
+            <p class="confirm-text">
+                @ImportSummary.Added ajoutés · @ImportSummary.Modified modifiés ·
+                @ImportSummary.Unchanged inchangés
+            </p>
+            @{ var invalidLines = ImportSummary.InvalidReferenceCounts.Where(kv => kv.Value > 0).ToList(); }
+            @if (invalidLines.Count > 0)
+            {
+                <p class="confirm-text">
+                    Valeurs non reconnues ignorées :
+                    @string.Join(" · ", invalidLines.Select(kv => $"{kv.Key} ({kv.Value})"))
+                </p>
+            }
+            @if (ImportSummary.SkippedRows.Count > 0)
+            {
+                <div class="conflict-list">
+                    @foreach (var line in ImportSummary.SkippedRows)
+                    {
+                        <div class="conflict-row">@line</div>
+                    }
+                </div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="() => ImportResultOpen = false">Fermer</button>
+            </div>
+        </div>
+    </div>
+}
 
 @if (ConfirmDeleteOpen)
 {
@@ -76,7 +134,21 @@ else
 }
 
 @code {
-    private record ColumnDef(string Key, string Label, int Width);
+    // A class, not a record — Width needs to be mutable for column resize
+    // (records default positional properties to init-only).
+    private class ColumnDef
+    {
+        public string Key { get; }
+        public string Label { get; }
+        public int Width { get; set; }
+
+        public ColumnDef(string key, string label, int width)
+        {
+            Key = key;
+            Label = label;
+            Width = width;
+        }
+    }
 
     private readonly List<ColumnDef> Columns = new()
     {
@@ -122,13 +194,87 @@ else
     private bool Loading = true;
     private bool Submitting;
     private string? Error;
+    private bool ExportingOrImporting;
+    private bool ImportResultOpen;
+    private ImportResult? ImportSummary;
+    private bool IsAdmin;
 
     private List<FranceOptique> Filtered =>
         string.IsNullOrWhiteSpace(SearchTerm)
             ? Items
             : Items.Where(c => GetCellText(c, SearchColumn).Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        IsAdmin = await CurrentUserSvc.IsAdminAsync();
+        await Load();
+    }
+
+    private ElementReference HeaderRowRef;
+    private DotNetObjectReference<Clients>? ResizeDotNetRef;
+    private bool ResizeAttached;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Guarded by ResizeAttached, not firstRender alone: HeaderRowRef only
+        // exists once Loading has flipped false and the real header markup
+        // has actually rendered — the first render (still showing
+        // "Chargement…") has no header row to attach to yet.
+        if (!ResizeAttached && !Loading)
+        {
+            ResizeAttached = true;
+            ResizeDotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("mafaliColumnResize.attach", HeaderRowRef, ResizeDotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnColumnResized(string key, int width)
+    {
+        var col = Columns.FirstOrDefault(c => c.Key == key);
+        if (col is null) return;
+        col.Width = width;
+        StateHasChanged();
+    }
+
+    public class ColumnAutoFitData
+    {
+        public string Header { get; set; } = "";
+        public List<string> Values { get; set; } = new();
+    }
+
+    // Blazor Server has no client-side data model to measure text against —
+    // the browser only ever sees rendered HTML — so double-click auto-fit
+    // asks for this one column's actual values (JS can't reach Filtered
+    // itself) and measures them client-side, where real font metrics exist.
+    // Uses Filtered, not Items: "longest content" should mean longest of
+    // what's currently showing, respecting any active search.
+    [JSInvokable]
+    public ColumnAutoFitData GetColumnAutoFitData(string key)
+    {
+        var col = Columns.FirstOrDefault(c => c.Key == key);
+        return new ColumnAutoFitData
+        {
+            Header = col?.Label ?? "",
+            Values = Filtered.Select(item => GetCellText(item, key)).ToList(),
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ResizeAttached)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("mafaliColumnResize.detach", HeaderRowRef);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone (e.g. tab closed) — nothing to clean up client-side.
+            }
+        }
+        ResizeDotNetRef?.Dispose();
+    }
 
     private async Task Load()
     {
@@ -141,7 +287,7 @@ else
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -171,6 +317,17 @@ else
         Nav.NavigateTo($"/clients/{Selected}/edit");
     }
 
+    // Opens Fen_Parcours_Client against the full client list (this grid's
+    // own base order, not whatever search filter is currently narrowing the
+    // view — the search bar here is a lightweight single-column filter, not
+    // the legacy's real multi-field Fen_Recherche_Client, so it isn't
+    // treated as defining a "result set" the way a saved Filtre is).
+    private void OpenParcours(long? cleOpl)
+    {
+        if (cleOpl is null) return;
+        Nav.NavigateTo($"/parcours-client?mode=clients&start={cleOpl}");
+    }
+
     private bool ConfirmDeleteOpen;
 
     private void OpenDeleteConfirm()
@@ -194,11 +351,81 @@ else
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
             Submitting = false;
+        }
+    }
+
+    // Exports Filtered, not Items — same "export what I'm looking at"
+    // behavior as the search bar's own scoping, matching how this app's
+    // earlier (now-archived) export feature worked.
+    private async Task Export()
+    {
+        ExportingOrImporting = true;
+        Error = null;
+        try
+        {
+            var bytes = ImportExportSvc.Export(Filtered);
+            using var stream = new MemoryStream(bytes);
+            using var streamRef = new DotNetStreamReference(stream);
+            var fileName = $"clients_{DateTime.Now:yyyy-MM-dd}.xlsx";
+            await JS.InvokeVoidAsync("mafaliFileDownload.downloadFileFromStream", fileName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", streamRef);
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            ExportingOrImporting = false;
+        }
+    }
+
+    // 20 MB cap: comfortably above any realistic client-list export (the
+    // full 488-row export was well under 100 KB as plain data), just a
+    // sanity ceiling against an accidental wrong-file upload — Blazor's own
+    // OpenReadStream default (500 KB) is too small for a real .xlsx.
+    private const long MaxImportFileSize = 20 * 1024 * 1024;
+
+    // Buffered into a MemoryStream first: the browser-backed stream
+    // InputFile hands back is forward-only, and ClosedXML's package reader
+    // needs random access (seeking) to parse the .xlsx zip container.
+    private async Task HandleImportFile(InputFileChangeEventArgs e)
+    {
+        // Backstop, not the real gate — the Importer control is only ever
+        // rendered for admins (IsAdmin check above), so a non-admin has no
+        // UI path to reach this handler at all. Checked again here anyway:
+        // client-rendered-or-not is a UI convenience, not a security
+        // boundary, and this is the one place that actually decides
+        // whether the bulk write happens.
+        if (!IsAdmin)
+        {
+            Error = "Seuls les administrateurs peuvent importer des clients.";
+            return;
+        }
+
+        ExportingOrImporting = true;
+        Error = null;
+        try
+        {
+            using var buffered = new MemoryStream();
+            await e.File.OpenReadStream(MaxImportFileSize).CopyToAsync(buffered);
+            buffered.Position = 0;
+            ImportSummary = await ImportExportSvc.ImportAsync(buffered);
+            ImportResultOpen = true;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            ExportingOrImporting = false;
         }
     }
 
@@ -234,7 +461,20 @@ else
         "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
         "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
         "note_perm" => c.NotePerm ?? "",
-        "etat_client" => c.EtatClient ?? "",
+        "etat_client" => c.EtatClient switch
+        {
+            "1" => "Client",
+            "2" => "Prospect",
+            _ => "Non défini",
+        },
+        _ => "",
+    };
+
+    private static string StatutBadgeClass(string? statut) => statut switch
+    {
+        "Payés" => "badge-success",
+        "Impayés" => "badge-warning",
+        "Bloqués" => "badge-danger",
         _ => "",
     };
 }

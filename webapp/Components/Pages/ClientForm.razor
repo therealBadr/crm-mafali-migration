@@ -91,6 +91,32 @@
     }
 </div>
 
+@if (ConflictDialogOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConflictDialogOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Conflit détecté</h3>
+            <p class="confirm-text">
+                Ce client a été modifié par quelqu'un d'autre pendant que vous le modifiiez.
+                Voici les champs concernés :
+            </p>
+            <div class="conflict-list">
+                @foreach (var c in Conflicts)
+                {
+                    <div class="conflict-row">
+                        <span class="conflict-field">@c.Field</span>
+                        <span class="conflict-values">Vous : @c.MyValue — Actuel : @c.CurrentValue</span>
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="ReloadAfterConflict">Recharger</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ForceApply">Écraser quand même</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public long? CleOpl { get; set; }
 
@@ -99,7 +125,10 @@
     private bool Submitting;
     private string? Error;
     private ClientInput Input = new();
+    private ClientInput? Baseline;
     private List<string> PaysOptions = new();
+    private bool ConflictDialogOpen;
+    private List<FieldConflict> Conflicts = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,28 +145,13 @@
                     Error = "Client introuvable.";
                     return;
                 }
-                Input = new ClientInput
-                {
-                    RaisonSociale = existing.RaisonSociale ?? string.Empty,
-                    Complement = existing.Complement,
-                    Rue = existing.Rue,
-                    Localisation1 = existing.Localisation1,
-                    Localisation2 = existing.Localisation2,
-                    Cp = existing.Cp,
-                    Ville = existing.Ville,
-                    Pays = existing.Pays,
-                    Telephone = existing.Telephone,
-                    Portable = existing.Portable,
-                    Fax = existing.Fax,
-                    Email = existing.Email,
-                    ResponsableAchat = existing.ResponsableAchat,
-                    Representant = existing.Representant,
-                };
+                Input = ClientInput.FromEntity(existing);
+                Baseline = ClientInput.FromEntity(existing);
             }
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -147,7 +161,39 @@
 
     private void Cancel() => Nav.NavigateTo("/clients");
 
-    private async Task Submit()
+    private Task Submit() => SaveAsync(force: false);
+
+    // Retry after the user has seen the conflict list and explicitly chose
+    // to overwrite anyway.
+    private Task ForceApply()
+    {
+        ConflictDialogOpen = false;
+        return SaveAsync(force: true);
+    }
+
+    private async Task ReloadAfterConflict()
+    {
+        ConflictDialogOpen = false;
+        Conflicts = new();
+        Loading = true;
+        try
+        {
+            var existing = await ClientSvc.GetAsync(CleOpl!.Value);
+            if (existing is null)
+            {
+                Error = "Client introuvable.";
+                return;
+            }
+            Input = ClientInput.FromEntity(existing);
+            Baseline = ClientInput.FromEntity(existing);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task SaveAsync(bool force)
     {
         if (string.IsNullOrWhiteSpace(Input.RaisonSociale))
         {
@@ -161,7 +207,14 @@
         {
             if (IsEditMode)
             {
-                await ClientSvc.UpdateAsync(CleOpl!.Value, Input);
+                if (Baseline is null) return;
+                var result = await ClientSvc.UpdateWithConflictCheckAsync(CleOpl!.Value, Baseline, Input, force);
+                if (!result.Success)
+                {
+                    Conflicts = result.Conflicts;
+                    ConflictDialogOpen = true;
+                    return;
+                }
             }
             else
             {
@@ -171,7 +224,7 @@
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {

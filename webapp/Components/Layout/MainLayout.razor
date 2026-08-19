@@ -1,38 +1,108 @@
 ﻿@inherits LayoutComponentBase
+@using System.Security.Claims
 
 <div class="app-shell">
     <header class="topbar">
         <span class="brand">Mafali CRM</span>
         <nav class="nav-links">
-            @foreach (var item in NavItems)
-            {
-                <NavLink href="@item.Href" class="nav-link" ActiveClass="nav-link-active">
-                    @item.Label
-                </NavLink>
-            }
+            <div class="nav-dropdown">
+                <button type="button" class="nav-link nav-dropdown-toggle" @onclick="ToggleFichiers">
+                    Fichiers
+                    <span class="nav-caret">@(FichiersOpen ? "▴" : "▾")</span>
+                </button>
+                @if (FichiersOpen)
+                {
+                    <div class="nav-dropdown-panel">
+                        @foreach (var item in FichierItems)
+                        {
+                            <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active" @onclick="CloseFichiers">
+                                @item.Label
+                            </NavLink>
+                        }
+                        <AuthorizeView Roles="admin">
+                            <Authorized>
+                                @* Utilisateurs used to be here — moved into Mon Compte
+                                   (2026-08-19, Badr: "admins never leave this page"),
+                                   not duplicated, so no separate nav entry for it
+                                   anymore. Mon Compte itself is already reachable
+                                   from the account menu on the right. *@
+                                <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active" @onclick="CloseFichiers">
+                                    Historique des Connexions
+                                </NavLink>
+                            </Authorized>
+                        </AuthorizeView>
+                    </div>
+                }
+            </div>
+            <NavLink href="/definir-filtre" class="nav-link" ActiveClass="nav-link-active">
+                Définir un Filtre
+            </NavLink>
+            <NavLink href="/filtres-predefinis" class="nav-link" ActiveClass="nav-link-active">
+                Filtres Prédéfinis
+            </NavLink>
+            <NavLink href="/recherche-client" class="nav-link" ActiveClass="nav-link-active" target="_blank">
+                Rechercher un Client
+            </NavLink>
+            <NavLink href="/rappels" class="nav-link" ActiveClass="nav-link-active">
+                Rappels
+            </NavLink>
         </nav>
+        <div class="nav-user">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="nav-user-name">
+                        @context.User.Identity?.Name (@Capitalize(context.User.FindFirst(ClaimTypes.Role)?.Value))
+                    </span>
+                    <NavLink href="/mon-compte" class="nav-link">Mon Compte</NavLink>
+                    @*
+                        Plain form POST, not @onclick — same reason as
+                        Login.razor: HttpContext.SignOutAsync needs a live,
+                        writable HTTP response, which the Blazor Server
+                        SignalR circuit no longer has once it's running.
+                    *@
+                    <form method="post" action="logout">
+                        <button type="submit" class="nav-link nav-logout-btn">Déconnexion</button>
+                    </form>
+                </Authorized>
+            </AuthorizeView>
+        </div>
     </header>
     <main class="app-body">
         @Body
     </main>
 </div>
 
+@if (FichiersOpen)
+{
+    <div class="nav-dropdown-backdrop" @onclick="CloseFichiers"></div>
+}
+
 <div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
+    Une erreur inattendue s'est produite.
+    <a href="" class="reload">Recharger</a>
     <a class="dismiss">🗙</a>
 </div>
 
 @code {
+    private bool FichiersOpen;
+
+    private static string Capitalize(string? s) =>
+        string.IsNullOrEmpty(s) ? "" : char.ToUpper(s[0]) + s[1..];
+
     // Pages register themselves here as we build them. No central route
     // table elsewhere to keep in sync — Familles.razor's own @page "/familles"
-    // is what actually makes the route work; this list is just the nav UI.
-    private readonly List<(string Href, string Label)> NavItems = new()
+    // is what actually makes the route work; this list is just the dropdown UI.
+    private readonly List<(string Href, string Label)> FichierItems = new()
     {
         ("/clients", "Fichier des Clients"),
         ("/familles", "Fichier des Familles"),
         ("/franchises", "Fichier des Franchises"),
         ("/pays", "Liste Pays"),
         ("/assistantes", "Fichier des Assistantes"),
+        ("/fichier-filtres", "Fichier des Filtres"),
+        ("/fichier-historique", "Fichier des Historiques"),
     };
+
+    private void ToggleFichiers() => FichiersOpen = !FichiersOpen;
+    private void CloseFichiers() => FichiersOpen = false;
 }

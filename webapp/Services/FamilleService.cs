@@ -1,7 +1,6 @@
 using MafaliCrm.Web.Data;
 using MafaliCrm.Web.Models;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace MafaliCrm.Web.Services;
 
@@ -60,7 +59,7 @@ public class FamilleService
                 .Where(f => f.NomFamille == currentName)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(f => f.NomFamille, newName));
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (FriendlyError.IsUniqueViolation(ex))
         {
             throw new InvalidOperationException("Cette famille existe déjà.");
         }
@@ -89,16 +88,9 @@ public class FamilleService
         {
             await db.SaveChangesAsync();
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (Exception ex) when (FriendlyError.IsUniqueViolation(ex))
         {
             throw new InvalidOperationException("Cette famille existe déjà.");
         }
     }
-
-    // SaveChangesAsync wraps the driver error as DbUpdateException.InnerException;
-    // ExecuteUpdateAsync executes outside that wrapping and can surface the
-    // PostgresException directly. Checking both shapes covers either path.
-    private static bool IsUniqueViolation(Exception ex) =>
-        ex is PostgresException { SqlState: "23505" } ||
-        ex.InnerException is PostgresException { SqlState: "23505" };
 }

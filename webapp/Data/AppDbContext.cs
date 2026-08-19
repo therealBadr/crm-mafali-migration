@@ -24,11 +24,15 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<Historique> Historiques { get; set; }
 
+    public virtual DbSet<LoginHistory> LoginHistories { get; set; }
+
     public virtual DbSet<Pays> Pays { get; set; }
 
     public virtual DbSet<TypeFamille> TypeFamilles { get; set; }
 
     public virtual DbSet<TypeFranchise> TypeFranchises { get; set; }
+
+    public virtual DbSet<User> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +47,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("prenom_nom");
             entity.Property(e => e.AllFiltres)
                 .HasDefaultValue(false)
+                .HasComment("Deprecated 2026-08-14: superseded by users.role (admin/assistant see all, commercial sees own only). Kept until the app is fully switched over to reading users.role.")
                 .HasColumnName("all_filtres");
             entity.Property(e => e.Commentaire)
                 .HasMaxLength(50)
@@ -145,6 +150,9 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(50)
                 .HasDefaultValueSql("'0'::character varying")
                 .HasColumnName("etat_client");
+            entity.Property(e => e.FacturationElectronique)
+                .HasDefaultValue(false)
+                .HasColumnName("facturation_electronique");
             entity.Property(e => e.Famille)
                 .HasMaxLength(30)
                 .HasColumnName("famille");
@@ -205,6 +213,12 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Rue)
                 .HasMaxLength(60)
                 .HasColumnName("rue");
+            entity.Property(e => e.Siren)
+                .HasMaxLength(9)
+                .HasColumnName("siren");
+            entity.Property(e => e.Siret)
+                .HasMaxLength(14)
+                .HasColumnName("siret");
             entity.Property(e => e.StatusVente)
                 .HasMaxLength(50)
                 .HasColumnName("status_vente");
@@ -260,6 +274,8 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("historique");
 
+            entity.HasIndex(e => e.DeletedAt, "idx_historique_deleted_at");
+
             entity.HasIndex(e => e.NumClient, "idx_historique_num_client");
 
             entity.Property(e => e.IdHisto)
@@ -273,6 +289,9 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("cp");
             entity.Property(e => e.DateRappel).HasColumnName("date_rappel");
             entity.Property(e => e.DateSaisie).HasColumnName("date_saisie");
+            entity.Property(e => e.DeletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("deleted_at");
             entity.Property(e => e.FicStk).HasColumnName("fic_stk");
             entity.Property(e => e.Franchise)
                 .HasMaxLength(50)
@@ -307,6 +326,33 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.NumClient)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_historique_num_client");
+        });
+
+        modelBuilder.Entity<LoginHistory>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("login_history_pkey");
+
+            entity.ToTable("login_history");
+
+            entity.HasIndex(e => e.LoggedInAt, "idx_login_history_logged_in_at");
+
+            entity.HasIndex(e => e.Login, "idx_login_history_login");
+
+            entity.Property(e => e.Id)
+                .UseIdentityAlwaysColumn()
+                .HasColumnName("id");
+            entity.Property(e => e.LoggedInAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("logged_in_at");
+            entity.Property(e => e.Login)
+                .HasMaxLength(100)
+                .HasColumnName("login");
+
+            entity.HasOne(d => d.LoginNavigation).WithMany(p => p.LoginHistories)
+                .HasForeignKey(d => d.Login)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("login_history_login_fkey");
         });
 
         modelBuilder.Entity<Pays>(entity =>
@@ -351,6 +397,36 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.NomFranchise)
                 .HasMaxLength(50)
                 .HasColumnName("nom_franchise");
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(e => e.Login).HasName("users_pkey");
+
+            entity.ToTable("users");
+
+            entity.Property(e => e.Login)
+                .HasMaxLength(100)
+                .HasColumnName("login");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("created_at");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.LastLoginAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("last_login_at");
+            entity.Property(e => e.MustChangePassword)
+                .HasDefaultValue(true)
+                .HasColumnName("must_change_password");
+            entity.Property(e => e.PasswordHash)
+                .HasMaxLength(255)
+                .HasColumnName("password_hash");
+            entity.Property(e => e.Role)
+                .HasMaxLength(20)
+                .HasColumnName("role");
         });
         modelBuilder.HasSequence("france_optique_cle_opl_seq");
 

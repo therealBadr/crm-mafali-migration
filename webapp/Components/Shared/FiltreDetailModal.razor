@@ -1,0 +1,207 @@
+@inject FiltreOperatriceService FiltreSvc
+
+@* Mirrors Fen_Detail_Filtre, opened from two different places in the legacy:
+   - Fen_Definir_Filtre's "Enregistrer le Filtre en Cours" (Mode="search-save"):
+     Filtre_Réel is locked to AffichageSeulement, pre-filled from the just-run
+     search. NouvelEnregistrement is always true here (Btn_Enreg_Filtre calls
+     HRAZ() first), so Valider is always a strict create, never a rename.
+   - Fen_Fichier_Filtre's Nouveau/Modifier (Mode="standalone"): Filtre_Réel is
+     a normal free-text field, exactly like the real migrated data (hand-typed
+     condition strings, inconsistent spacing/casing between rows — genuinely
+     free text in the legacy, not a structured value). *@
+
+@if (Opened && !ConflictDialogOpen)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Détails d'un Filtre Opérateur</h3>
+
+            <label for="fdm-operateur">Assistante Commerciale</label>
+            <select id="fdm-operateur" class="text-input" value="@NomOperateur" @onchange="e => NomOperateur = e.Value?.ToString()">
+                <option value="">Sélectionner…</option>
+                @foreach (var a in Assistantes)
+                {
+                    <option value="@a">@a</option>
+                }
+            </select>
+
+            <label for="fdm-nom">Nom du Filtre</label>
+            <input id="fdm-nom" class="text-input" maxlength="50" value="@NomFiltre"
+                   @oninput="e => NomFiltre = e.Value?.ToString() ?? string.Empty" />
+
+            <label for="fdm-reel">Filtre Réel</label>
+            <textarea id="fdm-reel" class="text-input" style="min-height: 80px;" readonly="@(Mode == "search-save")"
+                      value="@FiltreReel" @oninput="OnFiltreReelInput"></textarea>
+
+            @if (Mode == "standalone")
+            {
+                <p class="confirm-text">
+                    Pour saisir la date du jour, mettre SYSDATE à la place de la date. Ex : (Date_Saisie &gt; SYSDATE)
+                </p>
+            }
+            <p class="result-count">Taille du filtre : @FiltreReel.Length caractères. (Max : 512)</p>
+
+            @if (ModalError is not null)
+            {
+                <div class="alert">@ModalError</div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="Close">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="Submit">Valider</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Opened && ConflictDialogOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConflictDialogOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Conflit détecté</h3>
+            <p class="confirm-text">
+                Ce filtre a été modifié par quelqu'un d'autre pendant que vous le modifiiez.
+                Voici les champs concernés :
+            </p>
+            <div class="conflict-list">
+                @foreach (var c in Conflicts)
+                {
+                    <div class="conflict-row">
+                        <span class="conflict-field">@c.Field</span>
+                        <span class="conflict-values">Vous : @c.MyValue — Actuel : @c.CurrentValue</span>
+                    </div>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="ReloadAfterConflict">Recharger</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="ForceApply">Écraser quand même</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Opened { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public List<string> Assistantes { get; set; } = new();
+    [Parameter] public string Mode { get; set; } = "standalone";
+    [Parameter] public string? InitialNomOperateur { get; set; }
+    [Parameter] public string? InitialNomFiltre { get; set; }
+    [Parameter] public string? InitialFiltreReel { get; set; }
+    [Parameter] public (string NomOperateur, string NomFiltre)? OriginalKey { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private string? NomOperateur;
+    private string NomFiltre = string.Empty;
+    private string FiltreReel = string.Empty;
+    private string? ModalError;
+    private bool Submitting;
+    private bool _wasOpened;
+    private FiltreOperatriceInput? _baseline;
+    private bool ConflictDialogOpen;
+    private List<FieldConflict> Conflicts = new();
+
+    // Re-seed only on the closed->open transition — search-save mode passes
+    // a freshly computed InitialFiltreReel every time the parent opens this,
+    // and standalone edit passes the selected row's saved values. Neither
+    // should be clobbered by unrelated re-renders while already open.
+    protected override void OnParametersSet()
+    {
+        if (Opened && !_wasOpened)
+        {
+            NomOperateur = InitialNomOperateur;
+            NomFiltre = InitialNomFiltre ?? string.Empty;
+            FiltreReel = InitialFiltreReel ?? string.Empty;
+            // Same values as above, snapshotted separately for the conflict
+            // check — only meaningful in edit mode (OriginalKey set).
+            _baseline = OriginalKey is not null
+                ? new FiltreOperatriceInput { NomOperateur = InitialNomOperateur ?? string.Empty, NomFiltre = InitialNomFiltre ?? string.Empty, FiltreReel = InitialFiltreReel ?? string.Empty }
+                : null;
+            ModalError = null;
+            ConflictDialogOpen = false;
+            Conflicts = new();
+        }
+        _wasOpened = Opened;
+    }
+
+    private void OnFiltreReelInput(ChangeEventArgs e)
+    {
+        if (Mode != "standalone") return;
+        FiltreReel = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private Task Submit() => SaveAsync(force: false);
+
+    // Retry after the user has seen the conflict list and explicitly chose
+    // to overwrite anyway.
+    private Task ForceApply()
+    {
+        ConflictDialogOpen = false;
+        return SaveAsync(force: true);
+    }
+
+    private async Task ReloadAfterConflict()
+    {
+        ConflictDialogOpen = false;
+        Conflicts = new();
+        if (OriginalKey is not { } key) return;
+        var fresh = await FiltreSvc.GetAsync(key.NomOperateur, key.NomFiltre);
+        if (fresh is null)
+        {
+            ModalError = "Filtre introuvable.";
+            return;
+        }
+        NomOperateur = fresh.NomOperateur;
+        NomFiltre = fresh.NomFiltre;
+        FiltreReel = fresh.FiltreReel ?? string.Empty;
+        _baseline = FiltreOperatriceInput.FromEntity(fresh);
+    }
+
+    private async Task SaveAsync(bool force)
+    {
+        if (string.IsNullOrWhiteSpace(NomOperateur))
+        {
+            ModalError = "Vous devez sélectionner un opérateur avant de valider.";
+            return;
+        }
+        var trimmedName = NomFiltre.Trim();
+        if (trimmedName.Length == 0)
+        {
+            ModalError = "Vous devez saisir un nom unique pour ce filtre.";
+            return;
+        }
+
+        Submitting = true;
+        ModalError = null;
+        try
+        {
+            if (OriginalKey is { } key)
+            {
+                if (_baseline is null) return;
+                var current = new FiltreOperatriceInput { NomOperateur = NomOperateur!, NomFiltre = trimmedName, FiltreReel = FiltreReel };
+                var result = await FiltreSvc.UpdateWithConflictCheckAsync(key.NomOperateur, key.NomFiltre, _baseline, current, force);
+                if (!result.Success)
+                {
+                    Conflicts = result.Conflicts;
+                    ConflictDialogOpen = true;
+                    return;
+                }
+            }
+            else
+            {
+                await FiltreSvc.CreateAsync(NomOperateur!, trimmedName, FiltreReel);
+            }
+            await OnSaved.InvokeAsync();
+            await Close();
+        }
+        catch (Exception ex)
+        {
+            ModalError = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+}
