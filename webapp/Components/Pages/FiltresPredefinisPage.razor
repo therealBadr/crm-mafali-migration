@@ -74,11 +74,11 @@
 else
 {
     <div class="table-wrap" style="flex: 3 1 0; overflow-x: auto;">
-        <div style="width: @(ClientTotalWidth)px;">
+        <div style="width: 100%; min-width: @(ClientTotalWidth)px;">
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in ClientColumns)
                 {
-                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="@ColStyle(col, ClientColumns)">@col.Label</div>
                 }
             </div>
             <Virtualize Items="Results" Context="c" ItemSize="34">
@@ -87,7 +87,7 @@ else
                      @ondblclick="() => OpenEditIfAllowed(c.CleOpl)">
                     @foreach (var col in ClientColumns)
                     {
-                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                        <div class="cell" style="@ColStyle(col, ClientColumns)">
                             @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
                             {
                                 <span class="badge @badgeClass">@c.StatutsClients</span>
@@ -104,11 +104,11 @@ else
     </div>
 
     <div style="flex: 2 1 0; min-height: 0; display: flex; flex-direction: column; border-top: 2px solid var(--navy-border); overflow: auto;">
-        <div style="width: @(HistoTotalWidth)px;">
+        <div style="width: 100%; min-width: @(HistoTotalWidth)px;">
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in HistoColumns)
                 {
-                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="@ColStyle(col, HistoColumns)">@col.Label</div>
                 }
             </div>
             @if (SelectedClient is null)
@@ -121,7 +121,7 @@ else
                     <div class="row" style="cursor: default;">
                         @foreach (var col in HistoColumns)
                         {
-                            <div class="cell" style="flex: 0 0 @(col.Width)px;">@GetHistoCellText(h, col.Key)</div>
+                            <div class="cell" style="@ColStyle(col, HistoColumns)">@GetHistoCellText(h, col.Key)</div>
                         }
                     </div>
                 </Virtualize>
@@ -186,6 +186,13 @@ else
 
     private int ClientTotalWidth => ClientColumns.Sum(c => c.Width);
     private int HistoTotalWidth => HistoColumns.Sum(c => c.Width);
+
+    // Badr: "the column is finished early, not following the size of the
+    // screen horizontally" — fixed here first, now centralized in
+    // GridLayout (Services/GridLayout.cs) since the same bug turned up in
+    // every other grid in the app, not just this one.
+    private static string ColStyle(ColumnDef col, List<ColumnDef> columns) =>
+        GridLayout.ColStyle(col.Width, col == columns[^1]);
 
     private List<string> Assistantes = new();
     private string? SelectedAssistante;

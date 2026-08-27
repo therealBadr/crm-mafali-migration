@@ -1,9 +1,14 @@
 ﻿@inherits LayoutComponentBase
 @using System.Security.Claims
+@inject NavigationManager Nav
+@implements IDisposable
 
 <div class="app-shell">
     <header class="topbar">
-        <span class="brand">Mafali CRM</span>
+        <span class="brand">
+            <span class="brand-mark">M</span>
+            Mafali CRM
+        </span>
         <nav class="nav-links">
             <div class="nav-dropdown">
                 <button type="button" class="nav-link nav-dropdown-toggle" @onclick="ToggleFichiers">
@@ -15,7 +20,7 @@
                     <div class="nav-dropdown-panel">
                         @foreach (var item in FichierItems)
                         {
-                            <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active" @onclick="CloseFichiers">
+                            <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
                                 @item.Label
                             </NavLink>
                         }
@@ -26,7 +31,7 @@
                                    not duplicated, so no separate nav entry for it
                                    anymore. Mon Compte itself is already reachable
                                    from the account menu on the right. *@
-                                <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active" @onclick="CloseFichiers">
+                                <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
                                     Historique des Connexions
                                 </NavLink>
                             </Authorized>
@@ -45,6 +50,9 @@
             </NavLink>
             <NavLink href="/rappels" class="nav-link" ActiveClass="nav-link-active">
                 Rappels
+            </NavLink>
+            <NavLink href="/bon-commande" class="nav-link" ActiveClass="nav-link-active">
+                Bon de Commande
             </NavLink>
         </nav>
         <div class="nav-user">
@@ -105,4 +113,30 @@
 
     private void ToggleFichiers() => FichiersOpen = !FichiersOpen;
     private void CloseFichiers() => FichiersOpen = false;
+
+    // Each dropdown item used to close the menu via its own @onclick
+    // ("CloseFichiers") on the exact same click that also had to navigate
+    // it away — two separate things racing on one event: a server round
+    // trip to flip FichiersOpen (which unmounts the panel, including the
+    // link just clicked) versus the navigation itself. Closing on
+    // LocationChanged instead reacts to navigation actually happening,
+    // rather than competing with it.
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (FichiersOpen)
+        {
+            FichiersOpen = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }

@@ -9,6 +9,10 @@ archive/
 bin/
 obj/
 
+# Uploaded Bon de Commande templates — runtime data, not source; the repo's
+# public on GitHub and these are real internal business documents
+webapp/AppData/
+
 # .NET / Visual Studio extras
 *.user
 .vs/

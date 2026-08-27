@@ -35,11 +35,11 @@ else if (Items.Count == 0)
 else
 {
     <div class="table-wrap" style="overflow-x: auto;">
-        <div style="width: @(TotalWidth)px;">
+        <div style="@GridLayout.WrapperStyle(TotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in Columns)
                 {
-                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">@col.Label</div>
                 }
             </div>
             @foreach (var c in Items)
@@ -47,7 +47,7 @@ else
                 <div class="row" @onclick="() => OpenParcours(c.CleOpl)">
                     @foreach (var col in Columns)
                     {
-                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                        <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
                             @if (col.Key == "date_rappel")
                             {
                                 @c.DateRappel!.Value.ToString("dd/MM/yyyy")
@@ -57,7 +57,7 @@ else
                                 }
                                 else
                                 {
-                                    <span class="badge badge-warning" style="margin-left: 6px;">Aujourd'hui</span>
+                                    <span class="badge badge-info" style="margin-left: 6px;">Aujourd'hui</span>
                                 }
                             }
                             else

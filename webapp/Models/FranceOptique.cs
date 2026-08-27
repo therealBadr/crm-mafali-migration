@@ -81,6 +81,8 @@ public partial class FranceOptique
 
     public string? Siren { get; set; }
 
+    public string? Tva { get; set; }
+
     public bool FacturationElectronique { get; set; }
 
     public virtual ICollection<Ca> Cas { get; set; } = new List<Ca>();

@@ -4,16 +4,27 @@
     height: 100%;
     overflow: hidden;
     background: #ffffff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
 }
 
+/* Was solid navy — the one screen that never got the shared-chrome pass
+   (white surface, soft shadow, brand color reserved for accents) that
+   every other toolbar in the app already went through. Left it behind
+   during the earlier revamp steps and it started clashing hard the
+   moment the rest of the app moved off navy-as-default-background
+   (Badr: "styling/colors not 100% right" on this exact page). Same
+   treatment as .toolbar/.topbar now. */
 .pc-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    padding: 10px 16px;
-    background: var(--navy);
+    padding: var(--space-3) var(--space-4);
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
 }
 
 .pc-topbar-group {
@@ -25,13 +36,15 @@
 .pc-title {
     font-size: 14px;
     font-weight: 600;
-    color: #e8f1fb;
+    color: var(--navy);
     margin-right: 4px;
+    padding-left: var(--space-3);
+    border-left: 3px solid var(--teal);
 }
 
 .pc-topbar label {
     font-size: 12px;
-    color: #cfe0f2;
+    color: var(--header-text);
     white-space: nowrap;
 }
 
@@ -48,13 +61,26 @@
 .pc-position {
     font-size: 13px;
     font-weight: 600;
-    color: #ffffff;
+    color: var(--navy);
 }
 
 .pc-goto {
     width: 64px;
     margin-bottom: 0;
     text-align: center;
+}
+
+/* Wraps .pc-body so the Bloqué overlay below can sit as a sibling, not a
+   scrolling child — a position:absolute overlay placed *inside* an
+   overflow-y:auto element scrolls away with the content instead of
+   staying pinned over whatever's currently visible. This wrapper carries
+   the flex sizing .pc-body used to own directly; .pc-body itself keeps
+   its own scroll behavior unchanged. */
+.pc-body-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
 }
 
 .pc-body {
@@ -64,6 +90,33 @@
     display: flex;
     gap: 20px;
     padding: 16px;
+}
+
+/* Badr: checking Bloqué should visibly lock the whole editing area, not
+   just disable individual fields one at a time. Blur was 3px, called too
+   strong ("very blurry") — dropped to 20% of that (0.6px), just enough
+   softening to read as "locked" without meaningfully degrading legibility.
+   pointer-events: none since every field underneath is already disabled
+   via BlockedGate — this overlay is purely visual. */
+.pc-blocked-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(0.6px);
+    -webkit-backdrop-filter: blur(0.6px);
+    pointer-events: none;
+    z-index: 5;
+}
+
+.pc-blocked-text {
+    color: var(--danger-text);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9);
 }
 
 .pc-col {
@@ -104,7 +157,7 @@
 
 .pc-ca-panel {
     border: 1px solid var(--border-light);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     padding: 10px;
     background: var(--header-bg);
 }

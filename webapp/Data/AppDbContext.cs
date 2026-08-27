@@ -182,9 +182,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.MagasinPrincipal)
                 .HasMaxLength(50)
                 .HasColumnName("magasin_principal");
-            entity.Property(e => e.Note)
-                .HasMaxLength(250)
-                .HasColumnName("note");
+            entity.Property(e => e.Note).HasColumnName("note");
             entity.Property(e => e.NotePerm).HasColumnName("note_perm");
             entity.Property(e => e.OpEnCours)
                 .HasMaxLength(50)
@@ -224,7 +222,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("status_vente");
             entity.Property(e => e.StatutsClients)
                 .HasMaxLength(50)
-                .HasDefaultValueSql("'0'::character varying")
+                .HasDefaultValueSql("'-1'::character varying")
                 .HasColumnName("statuts_clients");
             entity.Property(e => e.TelBis)
                 .HasMaxLength(20)
@@ -232,6 +230,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Telephone)
                 .HasMaxLength(20)
                 .HasColumnName("telephone");
+            entity.Property(e => e.Tva)
+                .HasMaxLength(20)
+                .HasColumnName("tva");
             entity.Property(e => e.Ville)
                 .HasMaxLength(40)
                 .HasColumnName("ville");
@@ -293,6 +294,9 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("deleted_at");
             entity.Property(e => e.FicStk).HasColumnName("fic_stk");
+            entity.Property(e => e.FicStkNom)
+                .HasMaxLength(255)
+                .HasColumnName("fic_stk_nom");
             entity.Property(e => e.Franchise)
                 .HasMaxLength(50)
                 .HasColumnName("franchise");
@@ -301,9 +305,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.MagasinPrincipal)
                 .HasMaxLength(50)
                 .HasColumnName("magasin_principal");
-            entity.Property(e => e.Note)
-                .HasMaxLength(250)
-                .HasColumnName("note");
+            entity.Property(e => e.Note).HasColumnName("note");
             entity.Property(e => e.NumClient).HasColumnName("num_client");
             entity.Property(e => e.Operation)
                 .HasMaxLength(50)
@@ -316,7 +318,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("status_vente");
             entity.Property(e => e.StatutsClients)
                 .HasMaxLength(50)
-                .HasDefaultValueSql("'0'::character varying")
+                .HasDefaultValueSql("'-1'::character varying")
                 .HasColumnName("statuts_clients");
             entity.Property(e => e.Ville)
                 .HasMaxLength(40)

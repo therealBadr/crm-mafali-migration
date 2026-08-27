@@ -1,28 +1,122 @@
-/* Design tokens — docs/Mafali_CRM_Design_System_v1.md ("navy and teal").
+/* Self-hosted DM Sans (variable font, latin + latin-ext subsets — covers
+   French accents) instead of a Google Fonts CDN dependency, so the app
+   doesn't have a runtime fetch to an external host just to render text.
+   Replaced Inter 2026-08-19 (Badr, after seeing a 6-font comparison:
+   "DM Sans"). font-weight is a range because these are variable-font
+   files: one file covers every weight the app actually uses
+   (400/500/600/700), not four separate downloads. */
+@font-face {
+    font-family: "DM Sans";
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url("fonts/dmsans-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "DM Sans";
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url("fonts/dmsans-latin-ext.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Design tokens — docs/Mafali_CRM_Design_System_v1.md ("navy and teal"),
+   refreshed 2026-08-19 into a real system (gray ramp, spacing/radius/
+   shadow scales) instead of one-off hand-picked values per rule.
    Defined once here as CSS custom properties; every component (including
-   Blazor's scoped .razor.css files) can reference them via var(--name). */
+   Blazor's scoped .razor.css files) can reference them via var(--name).
+
+   --teal/--teal-hover/--teal-active keep their existing names even though
+   the color is actually coral/orange — renaming would require touching
+   every one of the ~20 files that already reference var(--teal) in the
+   same step, which is a separate piece of work from re-tuning the palette
+   itself. */
 :root {
-    --navy: #0b2340;
-    --navy-border: #2a4568;
-    --teal: #d85a30;
-    --teal-hover: #c04a24;
-    --teal-active: #a83d1c;
-    --header-bg: #f0f6fb;
-    --header-text: #4a6178;
-    --row-hover: #fdf3ef;
-    --row-selected: #fae4db;
-    --border-light: #dbe6f0;
-    --border-lighter: #eef3f8;
-    --text-body: #1a2b3d;
-    --header-strong-bg: #e4eef7;
-    --header-border: #d5dce6;
-    --row-alt: #fdf9f5;
-    --slate-bg: #e2e5ea;
-    --slate-text: #40474f;
-    --danger-bg: #f9e4e2;
-    --danger-text: #7a2124;
-    --success: #4d7c2e;
-    --danger: #a3272c;
+    /* Neutral ramp — replaces --header-bg/--border-light/--border-lighter/
+       --header-strong-bg/--header-border/--row-alt, which used to be six
+       independently-chosen blue-tinted grays with no scale relationship. */
+    --gray-50:  #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-900: #0f172a;
+
+    /* Brand — Badr picked "Navy and cyan" from a set of 6 palette mockups
+       (2026-08-19), replacing the earlier indigo+orange guess (which
+       itself replaced the original navy+coral — that was still "the
+       same two colors turned up," not a real palette change; this one
+       actually was chosen from real options). Variable names kept as
+       --navy/--teal so the ~20 files already consuming them via var()
+       don't all need touching for what is a palette swap, not a rename. */
+    --navy: #0f3460;
+    --navy-border: #2c5282;
+    --teal: #06b6d4;
+    --teal-hover: #0891b2;
+    --teal-active: #0e7490;
+
+    /* Genuinely third hue, distinct from both navy and the new cyan
+       accent (an indigo/sky info tone would sit too close to cyan) —
+       used for secondary/informational accents. */
+    --info: #7c3aed;
+    --info-bg: #ede9fe;
+    --info-text: #5b21b6;
+
+    /* Semantic — bumped more vivid to match the richer palette; these
+       used to be desaturated enough to nearly read as more gray tokens. */
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+
+    /* Structural tokens (borders, disabled states, body text) aliased onto
+       the neutral gray ramp — these should move together. Grid-chrome
+       tokens (header bands, zebra striping, row hover/selected) carry
+       their own tints, re-tuned to the navy/cyan pairing — cool tints
+       throughout now, not the warm coral/orange-adjacent ones from
+       either earlier palette. */
+    --header-bg: #eaf2f8;
+    --header-text: var(--gray-500);
+    --row-hover: #e6fbfd;
+    --row-selected: #c8f3f9;
+    --border-light: var(--gray-200);
+    --border-lighter: var(--gray-100);
+    --text-body: var(--gray-900);
+    --header-strong-bg: #dbe9f2;
+    --header-border: var(--gray-200);
+    --row-alt: #f2f9fb;
+    --slate-bg: var(--gray-200);
+    --slate-text: var(--gray-600);
+    --danger-bg: #fde3e3;
+    --danger-text: #991b1b;
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+
+    /* Radius scale */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    /* Soft, layered, navy-tinted shadows instead of flat black ones.
+       Strengthened once already (Badr: "not shadows and stuff" — the
+       first pass at these values read as too subtle to register as real
+       depth once actually on screen). */
+    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 8px 20px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.18), 0 4px 12px rgba(15, 23, 42, 0.08);
+
+    --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 html, body {
@@ -35,32 +129,32 @@ html, body {
     align-items: center;
     justify-content: center;
     background:
-        radial-gradient(circle at 30% 20%, #123258 0%, transparent 55%),
-        radial-gradient(circle at 80% 85%, #0e2b4d 0%, transparent 50%),
+        radial-gradient(circle at 30% 20%, #1e5288 0%, transparent 55%),
+        radial-gradient(circle at 80% 85%, #082544 0%, transparent 50%),
         var(--navy);
 }
 
 .login-card {
     background: #ffffff;
-    border-radius: 14px;
-    padding: 40px 36px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-6) var(--space-5);
     width: 380px;
     max-width: 90vw;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--shadow-lg), 0 24px 60px rgba(15, 23, 42, 0.35);
 }
 
 .login-brand {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 28px;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
 }
 
 .login-mark {
     width: 40px;
     height: 40px;
     flex-shrink: 0;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     background: linear-gradient(135deg, var(--teal), var(--teal-active));
     color: #ffffff;
     font-size: 17px;
@@ -89,7 +183,7 @@ html, body {
     font-size: 12px;
     font-weight: 600;
     color: var(--header-text);
-    margin: 18px 0 6px;
+    margin: var(--space-4) 0 var(--space-2);
 }
 
 .login-card label:first-of-type {
@@ -100,8 +194,8 @@ html, body {
     width: 100%;
     box-sizing: border-box;
     font-size: 14px;
-    padding: 11px 14px;
-    border-radius: 8px;
+    padding: 11px var(--space-4);
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border-light);
     margin-bottom: 0;
     transition: border-color 150ms ease, box-shadow 150ms ease;
@@ -114,21 +208,22 @@ html, body {
 }
 
 .login-card .btn-primary {
-    padding: 11px 14px;
-    border-radius: 8px;
+    padding: 11px var(--space-4);
+    border-radius: var(--radius-sm);
     font-size: 14px;
     font-weight: 600;
-    margin-top: 26px;
+    margin-top: var(--space-5);
 }
 
 .login-card .alert {
-    margin-bottom: 20px;
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-sm);
 }
 
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 13px;
+    font-family: var(--font-sans);
+    font-size: 14px;
     color: var(--text-body);
 }
 
@@ -168,71 +263,97 @@ h1:focus {
    lives here globally instead of being duplicated in each page's own
    scoped .razor.css file. */
 
+/* Was solid navy on every single Fichier_X screen — same "flat dark
+   block" problem the app topbar had, fixed the same way: a light
+   surface, separated by a soft shadow, with brand color reserved for the
+   primary action button and active states rather than painted across
+   the whole bar. */
 .toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
-    background: var(--navy);
+    padding: var(--space-3) var(--space-4);
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    z-index: 1;
 }
 
 .toolbar .title {
-    font-size: 13px;
-    font-weight: 500;
-    color: #e8f1fb;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--navy);
+    padding-left: var(--space-3);
+    border-left: 3px solid var(--teal);
 }
 
 .actions {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
 }
 
 .btn {
     font-size: 13px;
-    padding: 6px 14px;
-    border-radius: 4px;
+    padding: 8px var(--space-4);
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
+    transition: background 150ms ease, border-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
 }
 
 .btn:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--navy), 0 0 0 4px var(--teal);
+    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--teal);
 }
 
+/* Gradient instead of a flat fill — same coral→coral-active pairing
+   already used on the brand mark and avatars elsewhere in the app, so
+   the primary action button reads as part of the same visual language
+   instead of a plain solid rectangle. */
 .btn-primary {
-    background: var(--teal);
+    background: linear-gradient(135deg, var(--teal), var(--teal-active));
     color: #ffffff;
     border: none;
+    box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: var(--teal-hover);
+    background: linear-gradient(135deg, var(--teal-hover), var(--teal-active));
+    box-shadow: var(--shadow-md);
 }
 
 .btn-primary:active:not(:disabled) {
     background: var(--teal-active);
     transform: scale(0.97);
+    box-shadow: var(--shadow-sm);
 }
 
+/* Redesigned for a light background — this button used to only ever sit
+   on the solid-navy toolbar (pale text/border tuned for a dark bg), which
+   no longer exists as the default context. */
 .btn-outline {
-    background: transparent;
-    border: 1px solid var(--navy-border);
-    color: #cfe0f2;
+    background: #ffffff;
+    border: 1px solid var(--border-light);
+    color: var(--gray-700);
 }
 
 .btn-outline:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--header-strong-bg);
+    border-color: var(--gray-300);
 }
 
 .btn-outline:active:not(:disabled) {
-    background: rgba(255, 255, 255, 0.14);
+    background: var(--gray-200);
 }
 
 .btn-default {
     background: #ffffff;
     border: 1px solid var(--border-light);
     color: var(--text-body);
+}
+
+.btn-default:hover:not(:disabled) {
+    background: var(--header-strong-bg);
 }
 
 .btn:disabled {
@@ -243,10 +364,10 @@ h1:focus {
 .search-bar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
     background: var(--header-bg);
-    border-bottom: 1px solid var(--navy-border);
+    border-bottom: 1px solid var(--border-light);
 }
 
 .search-input {
@@ -265,9 +386,9 @@ h1:focus {
 .alert {
     background: var(--danger-bg);
     color: var(--danger-text);
-    padding: 8px 12px;
-    margin: 10px 16px;
-    border-radius: 4px;
+    padding: var(--space-2) var(--space-3);
+    margin: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
     font-size: 13px;
 }
 
@@ -277,12 +398,20 @@ h1:focus {
     font-size: 13px;
 }
 
+/* Was flush white content directly on a white app-body — content and
+   backdrop were literally the same color, so nothing but 1px borders
+   separated "screen" from "content" anywhere. app-body now carries a
+   soft neutral canvas (MainLayout.razor.css) and .page sits on top of it
+   as a real elevated card, the same relationship every card/modal in
+   this app already has to its own backdrop. */
 .page {
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
     background: #ffffff;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
 }
 
 .table-wrap {
@@ -393,11 +522,11 @@ h1:focus {
 
 .modal {
     background: #ffffff;
-    border-radius: 6px;
-    padding: 20px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
     width: 360px;
     max-width: 90vw;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-lg);
 }
 
 .modal h3 {
@@ -423,12 +552,22 @@ h1:focus {
     width: 100%;
     box-sizing: border-box;
     font-size: 13px;
-    padding: 6px 10px;
+    padding: 7px var(--space-3);
     border: 1px solid var(--border-light);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     margin-bottom: 10px;
     background: #ffffff;
     color: var(--text-body);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Was only defined per-screen (Login, Mon Compte) — every text input
+   gets a real focus state by default now, not just the two screens that
+   happened to add one locally. */
+.text-input:focus {
+    outline: none;
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3px var(--row-selected);
 }
 
 /* Browsers default disabled inputs/selects to a semi-transparent gray fill
@@ -454,7 +593,7 @@ h1:focus {
     overflow-y: auto;
     margin: 12px 0;
     border: 1px solid var(--border-light);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
 }
 
 .conflict-row {
@@ -487,8 +626,8 @@ h1:focus {
 }
 
 .badge-teal {
-    background: #fae4db;
-    color: #8a3216;
+    background: var(--row-selected);
+    color: #0e7490;
 }
 
 .badge-gray {
@@ -504,6 +643,11 @@ h1:focus {
 .badge-warning {
     background: #fbe8cf;
     color: #7a4a08;
+}
+
+.badge-info {
+    background: var(--info-bg);
+    color: var(--info-text);
 }
 
 .badge-danger {
@@ -525,11 +669,11 @@ h1:focus {
    from the toolbar+grid pattern, a centered card instead. */
 .form-page {
     max-width: 640px;
-    margin: 40px auto;
-    padding: 24px 28px;
+    margin: var(--space-6) auto;
+    padding: var(--space-5) var(--space-6);
     background: #ffffff;
-    border-radius: 6px;
-    box-shadow: 0 2px 12px rgba(11, 35, 64, 0.08);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
 }
 
 .form-page-title {

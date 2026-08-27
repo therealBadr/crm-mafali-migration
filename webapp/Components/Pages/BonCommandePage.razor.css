@@ -1,0 +1,56 @@
+/* Same card language as MonCompte's .mc-card — border/radius/shadow
+   tokens from app.css, nothing new introduced. Two independent cards
+   (Source, Destination) instead of tabs since, unlike Mon Compte, both
+   sections are short and there's no real reason to hide one while
+   looking at the other. */
+.bc-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    padding: var(--space-5);
+    max-width: 640px;
+}
+
+.bc-card {
+    background: #ffffff;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-6);
+}
+
+.bc-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--header-text);
+    margin: 0 0 18px;
+}
+
+.bc-template-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-lighter);
+}
+
+.bc-template-row:first-of-type {
+    border-top: none;
+    padding-top: 0;
+}
+
+.bc-template-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.bc-template-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--navy);
+}

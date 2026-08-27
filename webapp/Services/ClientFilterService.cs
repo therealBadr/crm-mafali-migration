@@ -25,12 +25,20 @@ public enum Operator { Eq, Ne, Gt, Gte, Lt, Lte, Between, StartsWith, NotStartsW
 // true — see SecondValueLiaison's own comment). Null/unset falls back to
 // that same auto-picked default, so callers that never set it (Recherche
 // Client's single-value conditions, chiefly) are unaffected.
+// GroupLiaison ("ou"/"et", default "ou") only matters when the same Field
+// appears as more than one Condition in a single request — e.g. "Famille
+// = X" OU "Famille <> Y", which needs two Conditions on "famille" since
+// each has its own Operator. It says how THIS Condition combines with the
+// PREVIOUS Condition for the same field; meaningless (and ignored) on a
+// field's first/only Condition. Distinct from Liaison above, which only
+// ever combines multiple Values within one Condition's own Operator.
 public class Condition
 {
     public string Field { get; set; } = string.Empty;
     public Operator Operator { get; set; }
     public List<string> Values { get; set; } = new();
     public string? Liaison { get; set; }
+    public string? GroupLiaison { get; set; }
 }
 
 // Mirrors the legacy Fen_Definir_Filtre's RempliRubriques(), which dynamically
@@ -232,26 +240,46 @@ public class ClientFilterService
     // at two values when the text format underneath never was.
     public static string BuildLegacyFiltreReel(List<Condition> conditions)
     {
-        var clauses = conditions.Select(c =>
+        // Grouped by field for the same reason as ApplyFieldConditions above:
+        // several Conditions on one field (different Operators, combined via
+        // their own GroupLiaison) read as one parenthesized group here too,
+        // e.g. "(Famille='X' ou Famille<>'Y')" — valid input to
+        // FiltreReelParser unchanged, since its grammar already allows
+        // repeating a field with different operators.
+        var fieldClauses = conditions.GroupBy(c => c.Field).Select(group =>
         {
-            var name = LegacyFieldName[c.Field];
+            var list = group.ToList();
+            if (list.Count == 1) return BuildSingleConditionClause(list[0]);
 
-            if (c.Operator == Operator.Between)
+            var combined = BuildSingleConditionClause(list[0]);
+            for (var i = 1; i < list.Count; i++)
             {
-                var clause = $"{name}{ApplyTemplate(c.Operator, c.Values[0])}".Replace("%2", c.Values[1]);
-                return $"({clause})";
+                var liaison = list[i].GroupLiaison ?? "ou";
+                combined = $"{combined} {liaison} {BuildSingleConditionClause(list[i])}";
             }
-
-            if (c.Values.Count > 1 && SecondValueLiaison.ContainsKey(c.Operator))
-            {
-                var liaison = c.Liaison ?? SecondValueLiaison[c.Operator];
-                var parts = c.Values.Select(v => $"{name}{ApplyTemplate(c.Operator, v)}");
-                return $"({string.Join($" {liaison} ", parts)})";
-            }
-
-            return $"({name}{ApplyTemplate(c.Operator, c.Values[0])})";
+            return $"({combined})";
         });
-        return string.Join(" et ", clauses);
+        return string.Join(" et ", fieldClauses);
+    }
+
+    private static string BuildSingleConditionClause(Condition c)
+    {
+        var name = LegacyFieldName[c.Field];
+
+        if (c.Operator == Operator.Between)
+        {
+            var clause = $"{name}{ApplyTemplate(c.Operator, c.Values[0])}".Replace("%2", c.Values[1]);
+            return $"({clause})";
+        }
+
+        if (c.Values.Count > 1 && SecondValueLiaison.ContainsKey(c.Operator))
+        {
+            var liaison = c.Liaison ?? SecondValueLiaison[c.Operator];
+            var parts = c.Values.Select(v => $"{name}{ApplyTemplate(c.Operator, v)}");
+            return $"({string.Join($" {liaison} ", parts)})";
+        }
+
+        return $"({name}{ApplyTemplate(c.Operator, c.Values[0])})";
     }
 
     private static string ApplyTemplate(Operator op, string value) =>
@@ -321,9 +349,16 @@ public class ClientFilterService
         await using var db = await _dbFactory.CreateDbContextAsync();
         IQueryable<FranceOptique> query = db.FranceOptiques.AsNoTracking();
 
-        foreach (var c in conditions)
+        // Grouped by field first: two Conditions on the same field (e.g.
+        // "Famille = X" + "Famille <> Y", one Condition per Operator) combine
+        // via their own GroupLiaison into one predicate, not two independent
+        // AND'd .Where() calls — GroupBy preserves each group's original
+        // relative order, so GroupLiaison (which only makes sense relative to
+        // "the previous condition for this field") lines up correctly.
+        // Different fields still always AND together, unchanged.
+        foreach (var fieldGroup in conditions.GroupBy(c => c.Field))
         {
-            query = ApplyCondition(query, c);
+            query = ApplyFieldConditions(query, fieldGroup.ToList());
         }
 
         var rows = await query.OrderBy(c => c.CleOpl).ToListAsync();
@@ -346,28 +381,62 @@ public class ClientFilterService
         return (rows, rows.Count);
     }
 
-    private static IQueryable<FranceOptique> ApplyCondition(IQueryable<FranceOptique> query, Condition c)
+    // Applies every Condition already known to share one Field as a single
+    // combined .Where() — needed (rather than one .Where() per Condition)
+    // because Dynamic LINQ's "@0, @1, ..." placeholders are positional
+    // across one whole predicate string, so multi-condition placeholders
+    // have to be numbered globally as they're built, not restart at 0 per
+    // condition.
+    private static IQueryable<FranceOptique> ApplyFieldConditions(IQueryable<FranceOptique> query, List<Condition> sameFieldConditions)
     {
-        var meta = Fields.First(f => f.Field == c.Field);
-        var prop = PropertyName[c.Field];
+        var meta = Fields.First(f => f.Field == sameFieldConditions[0].Field);
+        var prop = PropertyName[sameFieldConditions[0].Field];
+        var args = new List<object>();
+        var clauses = new List<string>();
 
+        foreach (var c in sameFieldConditions)
+        {
+            clauses.Add(BuildConditionClause(meta, prop, c, args));
+        }
+
+        var combined = clauses[0];
+        for (var i = 1; i < clauses.Count; i++)
+        {
+            var joiner = (sameFieldConditions[i].GroupLiaison ?? "ou") == "ou" ? "||" : "&&";
+            combined = $"({combined}) {joiner} ({clauses[i]})";
+        }
+
+        return query.Where(combined, args.ToArray());
+    }
+
+    // Builds one Condition's predicate fragment, appending its values to the
+    // shared args list (so placeholder numbers stay globally correct when
+    // ApplyFieldConditions strings several of these together) and returning
+    // just the fragment text — same logic the old single-condition
+    // ApplyCondition used, just no longer calling .Where() itself.
+    private static string BuildConditionClause(FilterField meta, string prop, Condition c, List<object> args)
+    {
         if (c.Operator == Operator.Between)
         {
-            var v1 = CastValue(meta.Type, c.Values[0]);
-            var v2 = CastValue(meta.Type, c.Values[1]);
-            return query.Where($"{prop} >= @0 && {prop} <= @1", v1, v2);
+            var i1 = args.Count; args.Add(CastValue(meta.Type, c.Values[0]));
+            var i2 = args.Count; args.Add(CastValue(meta.Type, c.Values[1]));
+            return $"{prop} >= @{i1} && {prop} <= @{i2}";
         }
 
         if (c.Values.Count > 1 && SecondValueLiaison.ContainsKey(c.Operator))
         {
             var liaison = c.Liaison ?? SecondValueLiaison[c.Operator];
             var joiner = liaison == "ou" ? "||" : "&&";
-            var clauses = c.Values.Select((_, i) => $"({OperatorTemplate(prop, c.Operator, $"@{i}")})");
-            var args = c.Values.Select(v => CastValue(meta.Type, v)).ToArray();
-            return query.Where(string.Join($" {joiner} ", clauses), args);
+            var parts = c.Values.Select(v =>
+            {
+                var idx = args.Count; args.Add(CastValue(meta.Type, v));
+                return $"({OperatorTemplate(prop, c.Operator, $"@{idx}")})";
+            });
+            return string.Join($" {joiner} ", parts);
         }
 
-        return query.Where(OperatorTemplate(prop, c.Operator, "@0"), CastValue(meta.Type, c.Values[0]));
+        var index = args.Count; args.Add(CastValue(meta.Type, c.Values[0]));
+        return OperatorTemplate(prop, c.Operator, $"@{index}");
     }
 
     // internal, not private: FiltreReelParser reuses this so parsed raw

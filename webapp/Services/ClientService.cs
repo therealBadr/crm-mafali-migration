@@ -18,6 +18,8 @@ public class ClientInput
 {
     public string RaisonSociale { get; set; } = string.Empty;
     public string? Complement { get; set; }
+    public string? Famille { get; set; }
+    public string? Franchise { get; set; }
     public string? Rue { get; set; }
     public string? Localisation1 { get; set; }
     public string? Localisation2 { get; set; }
@@ -30,6 +32,7 @@ public class ClientInput
     public string? Email { get; set; }
     public string? ResponsableAchat { get; set; }
     public string? Representant { get; set; }
+    public string? AssistanteCommercial { get; set; }
 
     // Same read-modify-write starting point ParcoursClientInput.FromEntity
     // gives Fen_Parcours_Client/Fen_Recherche_Client — used by ClientForm's
@@ -38,6 +41,8 @@ public class ClientInput
     {
         RaisonSociale = c.RaisonSociale ?? string.Empty,
         Complement = c.Complement,
+        Famille = c.Famille,
+        Franchise = c.Franchise,
         Rue = c.Rue,
         Localisation1 = c.Localisation1,
         Localisation2 = c.Localisation2,
@@ -50,6 +55,7 @@ public class ClientInput
         Email = c.Email,
         ResponsableAchat = c.ResponsableAchat,
         Representant = c.Representant,
+        AssistanteCommercial = c.AssistanteCommercial,
     };
 }
 
@@ -95,6 +101,7 @@ public class ParcoursClientInput
     public bool RappelRdv { get; set; }
     public string? Siret { get; set; }
     public string? Siren { get; set; }
+    public string? Tva { get; set; }
     public bool FacturationElectronique { get; set; }
 
     // Shared by Fen_Parcours_Client (writes every field) and
@@ -139,6 +146,7 @@ public class ParcoursClientInput
         RappelRdv = c.RappelRdv,
         Siret = c.Siret,
         Siren = c.Siren,
+        Tva = c.Tva,
         FacturationElectronique = c.FacturationElectronique,
     };
 }
@@ -249,6 +257,8 @@ public class ClientService
     {
         [nameof(ClientInput.RaisonSociale)] = "Raison Sociale",
         [nameof(ClientInput.Complement)] = "Complément",
+        [nameof(ClientInput.Famille)] = "Famille",
+        [nameof(ClientInput.Franchise)] = "Franchise",
         [nameof(ClientInput.Rue)] = "Rue",
         [nameof(ClientInput.Localisation1)] = "Localisation 1",
         [nameof(ClientInput.Localisation2)] = "Localisation 2",
@@ -261,6 +271,7 @@ public class ClientService
         [nameof(ClientInput.Email)] = "Email",
         [nameof(ClientInput.ResponsableAchat)] = "Responsable Achat",
         [nameof(ClientInput.Representant)] = "Représentant",
+        [nameof(ClientInput.AssistanteCommercial)] = "Assistante Commerciale",
     };
 
     // ClientForm's edit-mode save path — same three-way merge as
@@ -332,6 +343,7 @@ public class ClientService
         [nameof(ParcoursClientInput.RappelRdv)] = "Rappel RDV",
         [nameof(ParcoursClientInput.Siret)] = "SIRET",
         [nameof(ParcoursClientInput.Siren)] = "SIREN",
+        [nameof(ParcoursClientInput.Tva)] = "TVA",
         [nameof(ParcoursClientInput.FacturationElectronique)] = "Facturation Électronique",
     };
 
@@ -414,6 +426,7 @@ public class ClientService
         entity.RappelRdv = merged.RappelRdv;
         entity.Siret = merged.Siret;
         entity.Siren = merged.Siren;
+        entity.Tva = merged.Tva;
         entity.FacturationElectronique = merged.FacturationElectronique;
 
         try
@@ -511,6 +524,8 @@ public class ClientService
     {
         entity.RaisonSociale = input.RaisonSociale;
         entity.Complement = input.Complement;
+        entity.Famille = input.Famille;
+        entity.Franchise = input.Franchise;
         entity.Rue = input.Rue;
         entity.Localisation1 = input.Localisation1;
         entity.Localisation2 = input.Localisation2;
@@ -523,6 +538,7 @@ public class ClientService
         entity.Email = input.Email;
         entity.ResponsableAchat = input.ResponsableAchat;
         entity.Representant = input.Representant;
+        entity.AssistanteCommercial = input.AssistanteCommercial;
     }
 
     // The constraint-name-aware message is specific enough to this entity

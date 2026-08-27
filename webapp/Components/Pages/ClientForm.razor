@@ -2,6 +2,9 @@
 @page "/clients/{CleOpl:long}/edit"
 @inject ClientService ClientSvc
 @inject PaysService PaysSvc
+@inject FamilleService FamilleSvc
+@inject FranchiseService FranchiseSvc
+@inject AssistanteService AssistanteSvc
 @inject NavigationManager Nav
 
 <PageTitle>@(IsEditMode ? "Modifier Client" : "Nouveau Client")</PageTitle>
@@ -24,6 +27,24 @@
             <label for="f-complement">Complement</label>
             <input id="f-complement" class="text-input" maxlength="60" value="@Input.Complement"
                    @oninput="e => Input.Complement = e.Value?.ToString()" />
+
+            <label for="f-famille">Famille</label>
+            <select id="f-famille" class="text-input" value="@Input.Famille" @onchange="e => Input.Famille = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FamilleOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
+
+            <label for="f-franchise">Franchise</label>
+            <select id="f-franchise" class="text-input" value="@Input.Franchise" @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FranchiseOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
 
             <label for="f-rue">Rue</label>
             <input id="f-rue" class="text-input" maxlength="60" value="@Input.Rue"
@@ -69,6 +90,15 @@
             <label for="f-email">Email</label>
             <input id="f-email" class="text-input" type="email" maxlength="50" value="@Input.Email"
                    @oninput="e => Input.Email = e.Value?.ToString()" />
+
+            <label for="f-assistante">Assistante Commerciale</label>
+            <select id="f-assistante" class="text-input" value="@Input.AssistanteCommercial" @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var a in AssistanteOptions)
+                {
+                    <option value="@a">@a</option>
+                }
+            </select>
 
             <label for="f-resp">Responsable Achat</label>
             <input id="f-resp" class="text-input" maxlength="50" value="@Input.ResponsableAchat"
@@ -127,6 +157,9 @@
     private ClientInput Input = new();
     private ClientInput? Baseline;
     private List<string> PaysOptions = new();
+    private List<string> FamilleOptions = new();
+    private List<string> FranchiseOptions = new();
+    private List<string> AssistanteOptions = new();
     private bool ConflictDialogOpen;
     private List<FieldConflict> Conflicts = new();
 
@@ -136,6 +169,9 @@
         try
         {
             PaysOptions = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
+            FamilleOptions = await FamilleSvc.ListAsync();
+            FranchiseOptions = await FranchiseSvc.ListAsync();
+            AssistanteOptions = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
 
             if (IsEditMode)
             {

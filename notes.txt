@@ -33,3 +33,18 @@ A rajouter: facturation electronique, SIRET, SIREN, facturation electronique
 
 
 colum resize just like excel
+
+====
+
+
+To ask Olivier:
+	- Type of the new fields in Parcours Client (SIRET, SIREN, facturation)
+	- Cleaning mecanism of the Rappel.
+
+
+
+===
+
+To-do:
+	- Bon de commande
+	- When typing a value then rechercher i get a client 

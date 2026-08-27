@@ -1,6 +1,9 @@
 @page "/definir-filtre"
 @inject ClientFilterService FilterSvc
 @inject AssistanteService AssistanteSvc
+@inject FamilleService FamilleSvc
+@inject FranchiseService FranchiseSvc
+@inject PaysService PaysSvc
 @inject CurrentUserService CurrentUser
 
 <PageTitle>Définir un Filtre</PageTitle>
@@ -55,90 +58,147 @@
             <tbody>
                 @foreach (var f in ClientFilterService.Fields)
                 {
-                    var row = Rows[f.Field];
-                    var isLiaison = row.Operator is not null && ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
-                    <tr>
-                        <td>@f.Label</td>
-                        <td>
-                            <select class="text-input" value="@(row.Operator?.ToString() ?? "")" @onchange="e => OnOperatorChange(f.Field, e)">
-                                <option value="">&lt; Aucune &gt;</option>
-                                @foreach (var op in ClientFilterService.OperatorsByType[f.Type])
+                    var groups = Rows[f.Field];
+                    @for (var g = 0; g < groups.Count; g++)
+                    {
+                        var row = groups[g];
+                        var groupIndex = g;
+                        var isFirstGroup = groupIndex == 0;
+                        var isLiaison = row.Operator is not null && ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
+                        <tr>
+                            <td>
+                                @if (isFirstGroup)
                                 {
-                                    <option value="@op">@OperatorLabels[op]</option>
-                                }
-                            </select>
-                        </td>
-                        <td>
-                            @if (row.Operator is not null)
-                            {
-                                @if (f.Type == FieldType.Boolean)
-                                {
-                                    <select class="text-input" value="@row.Values[0]" @onchange="e => row.Values[0] = e.Value?.ToString() ?? string.Empty">
-                                        <option value="true">Oui</option>
-                                        <option value="false">Non</option>
-                                    </select>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                                        <span>@f.Label</span>
+                                        <button class="value-btn btn-add-value" title="Ajouter une condition (opérateur différent) pour ce champ"
+                                                @onclick="() => AddGroup(f.Field)">+</button>
+                                    </div>
                                 }
                                 else
                                 {
-                                    <input class="text-input" type="@InputType(f.Type)" value="@row.Values[0]"
-                                           @oninput="e => row.Values[0] = e.Value?.ToString() ?? string.Empty" />
-                                }
-                            }
-                        </td>
-                        @for (var col = 1; col <= ExtraValueColumns; col++)
-                        {
-                            var idx = col;
-                            <td class="value-cell">
-                                @if (row.Operator == Operator.Between)
-                                {
-                                    @if (idx == 1)
-                                    {
-                                        @if (f.Type == FieldType.Boolean)
-                                        {
-                                            <select class="text-input" value="@row.Values[1]" @onchange="e => row.Values[1] = e.Value?.ToString() ?? string.Empty">
-                                                <option value="true">Oui</option>
-                                                <option value="false">Non</option>
-                                            </select>
-                                        }
-                                        else
-                                        {
-                                            <input class="text-input" type="@InputType(f.Type)" value="@row.Values[1]"
-                                                   @oninput="e => row.Values[1] = e.Value?.ToString() ?? string.Empty" />
-                                        }
-                                    }
-                                }
-                                else if (isLiaison && idx < row.Values.Count)
-                                {
                                     <div style="display: flex; align-items: center; gap: 6px;">
-                                        <select class="text-input" style="flex: 0 0 56px; padding: 4px;" title="OU (au moins une des valeurs) ou ET (toutes les valeurs à la fois — n'a de sens qu'avec Différent de / Ne commence pas par / Ne contient pas)"
-                                                value="@row.Liaison" @onchange="e => row.Liaison = e.Value?.ToString() ?? row.Liaison">
+                                        <select class="text-input" style="flex: 0 0 56px; padding: 4px;" title="Comment cette condition se combine avec la précédente pour ce champ"
+                                                value="@row.GroupLiaison" @onchange="e => row.GroupLiaison = e.Value?.ToString() ?? row.GroupLiaison">
                                             <option value="ou">OU</option>
                                             <option value="et">ET</option>
                                         </select>
-                                        @if (f.Type == FieldType.Boolean)
-                                        {
-                                            <select class="text-input" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[idx]" @onchange="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty">
-                                                <option value="true">Oui</option>
-                                                <option value="false">Non</option>
-                                            </select>
-                                        }
-                                        else
-                                        {
-                                            <input class="text-input" style="flex: 1 1 auto; min-width: 0;" type="@InputType(f.Type)" value="@row.Values[idx]"
-                                                   @oninput="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty" />
-                                        }
-                                        <button class="value-btn btn-remove-value" title="Retirer cette valeur"
-                                                @onclick="() => RemoveValue(f.Field, idx)">×</button>
+                                        <button class="value-btn btn-remove-value" title="Retirer cette condition"
+                                                @onclick="() => RemoveGroup(f.Field, groupIndex)">×</button>
                                     </div>
                                 }
-                                else if (isLiaison && idx == row.Values.Count)
+                            </td>
+                            <td>
+                                <select class="text-input" value="@(row.Operator?.ToString() ?? "")" @onchange="e => OnOperatorChange(f.Field, groupIndex, e)">
+                                    <option value="">&lt; Aucune &gt;</option>
+                                    @foreach (var op in ClientFilterService.OperatorsByType[f.Type])
+                                    {
+                                        <option value="@op">@OperatorLabels[op]</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                @if (row.Operator is not null)
                                 {
-                                    <button class="value-btn btn-add-value" title="Ajouter une valeur"
-                                            @onclick="() => AddValue(f.Field)">+</button>
+                                    @if (f.Type == FieldType.Boolean)
+                                    {
+                                        <select class="text-input" value="@row.Values[0]" @onchange="e => row.Values[0] = e.Value?.ToString() ?? string.Empty">
+                                            <option value="true">Oui</option>
+                                            <option value="false">Non</option>
+                                        </select>
+                                    }
+                                    else if (LookupOptions.TryGetValue(f.Field, out var lookup0))
+                                    {
+                                        <select class="text-input" value="@row.Values[0]" @onchange="e => row.Values[0] = e.Value?.ToString() ?? string.Empty">
+                                            <option value="">—</option>
+                                            @foreach (var opt in lookup0)
+                                            {
+                                                <option value="@opt">@opt</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input class="text-input" type="@InputType(f.Type)" value="@row.Values[0]"
+                                               @oninput="e => row.Values[0] = e.Value?.ToString() ?? string.Empty" />
+                                    }
                                 }
                             </td>
-                        }
-                    </tr>
+                            @for (var col = 1; col <= ExtraValueColumns; col++)
+                            {
+                                var idx = col;
+                                <td class="value-cell">
+                                    @if (row.Operator == Operator.Between)
+                                    {
+                                        @if (idx == 1)
+                                        {
+                                            @if (f.Type == FieldType.Boolean)
+                                            {
+                                                <select class="text-input" value="@row.Values[1]" @onchange="e => row.Values[1] = e.Value?.ToString() ?? string.Empty">
+                                                    <option value="true">Oui</option>
+                                                    <option value="false">Non</option>
+                                                </select>
+                                            }
+                                            else if (LookupOptions.TryGetValue(f.Field, out var lookup1))
+                                            {
+                                                <select class="text-input" value="@row.Values[1]" @onchange="e => row.Values[1] = e.Value?.ToString() ?? string.Empty">
+                                                    <option value="">—</option>
+                                                    @foreach (var opt in lookup1)
+                                                    {
+                                                        <option value="@opt">@opt</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <input class="text-input" type="@InputType(f.Type)" value="@row.Values[1]"
+                                                       @oninput="e => row.Values[1] = e.Value?.ToString() ?? string.Empty" />
+                                            }
+                                        }
+                                    }
+                                    else if (isLiaison && idx < row.Values.Count)
+                                    {
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <select class="text-input" style="flex: 0 0 56px; padding: 4px;" title="OU (au moins une des valeurs) ou ET (toutes les valeurs à la fois — n'a de sens qu'avec Différent de / Ne commence pas par / Ne contient pas)"
+                                                    value="@row.Liaison" @onchange="e => row.Liaison = e.Value?.ToString() ?? row.Liaison">
+                                                <option value="ou">OU</option>
+                                                <option value="et">ET</option>
+                                            </select>
+                                            @if (f.Type == FieldType.Boolean)
+                                            {
+                                                <select class="text-input" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[idx]" @onchange="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty">
+                                                    <option value="true">Oui</option>
+                                                    <option value="false">Non</option>
+                                                </select>
+                                            }
+                                            else if (LookupOptions.TryGetValue(f.Field, out var lookupN))
+                                            {
+                                                <select class="text-input" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[idx]" @onchange="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty">
+                                                    <option value="">—</option>
+                                                    @foreach (var opt in lookupN)
+                                                    {
+                                                        <option value="@opt">@opt</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <input class="text-input" style="flex: 1 1 auto; min-width: 0;" type="@InputType(f.Type)" value="@row.Values[idx]"
+                                                       @oninput="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty" />
+                                            }
+                                            <button class="value-btn btn-remove-value" title="Retirer cette valeur"
+                                                    @onclick="() => RemoveValue(f.Field, groupIndex, idx)">×</button>
+                                        </div>
+                                    }
+                                    else if (isLiaison && idx == row.Values.Count)
+                                    {
+                                        <button class="value-btn btn-add-value" title="Ajouter une valeur"
+                                                @onclick="() => AddValue(f.Field, groupIndex)">+</button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
                 }
             </tbody>
         </table>
@@ -152,18 +212,18 @@ else
 {
     <p class="count" style="text-align: right;">@Count enregistrement@(Count != 1 ? "s" : "")</p>
     <div class="table-wrap" style="overflow-x: auto;">
-        <div style="width: @(ResultTotalWidth)px;">
+        <div style="@GridLayout.WrapperStyle(ResultTotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in ResultColumns)
                 {
-                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])">@col.Label</div>
                 }
             </div>
             <Virtualize Items="Results" Context="c" ItemSize="34">
                 <div class="row" style="cursor: default;">
                     @foreach (var col in ResultColumns)
                     {
-                        <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                        <div class="cell" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])">
                             @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
                             {
                                 <span class="badge @badgeClass">@c.StatutsClients</span>
@@ -201,6 +261,13 @@ else
         // "wrong" pairing produces an always-empty or always-everything
         // condition. His call, not blocked here.
         public string Liaison = "ou";
+        // Only meaningful when a field has more than one RowState (see
+        // Rows below) — how THIS group combines with the PREVIOUS group
+        // for the same field, e.g. "Famille = X" OU "Famille <> Y" needs
+        // two separate RowState groups (different Operators can't share
+        // one Liaison-only row), connected by this. Ignored on a field's
+        // first/only group.
+        public string GroupLiaison = "ou";
     }
 
     private static readonly Dictionary<Operator, string> OperatorLabels = new()
@@ -253,8 +320,14 @@ else
 
     private int ResultTotalWidth => ResultColumns.Sum(c => c.Width);
 
-    private readonly Dictionary<string, RowState> Rows =
-        ClientFilterService.Fields.ToDictionary(f => f.Field, f => new RowState());
+    // Each field maps to a *list* of groups, not one RowState — a field
+    // normally has exactly one (the common case, unchanged from before),
+    // but can grow more via "Ajouter une condition" when a field needs
+    // more than one Operator at once (Famille = X OU Famille <> Y can't
+    // share a single RowState, since Operator is one value per group, not
+    // per-value — see GroupLiaison above for how extra groups connect).
+    private readonly Dictionary<string, List<RowState>> Rows =
+        ClientFilterService.Fields.ToDictionary(f => f.Field, f => new List<RowState> { new() });
 
     // Real columns, not stacked lines inside one cell — Badr's correction.
     // Table-wide, not per-row: every row renders the same number of
@@ -264,7 +337,7 @@ else
     // yet. Recomputed on every render, so adding/removing a value anywhere
     // grows or shrinks the whole table immediately — no separate state to
     // keep in sync.
-    private int ExtraValueColumns => Math.Max(1, Rows.Values.Max(r => r.Values.Count));
+    private int ExtraValueColumns => Math.Max(1, Rows.Values.SelectMany(groups => groups).Max(r => r.Values.Count));
 
     // 280px minimum — this column has to fit an OU/ET select (56px) *and*
     // a × button (26px) *and* the actual value box, not just one control.
@@ -324,6 +397,16 @@ else
     private string SaveModalFiltreReel = string.Empty;
     private bool CanCreate;
 
+    // Badr: "Famille/Franchise/Pays/Assistante must be dropdowns, not free
+    // text, everywhere" (2026-08-17 policy, already applied to Parcours
+    // Client and Recherche Client) — this was the one screen still missing
+    // it, since every condition's value box here is otherwise a plain text
+    // input regardless of field. Keyed by the same field keys
+    // ClientFilterService.Fields already uses, so the markup below can just
+    // check LookupOptions.ContainsKey(f.Field) instead of hardcoding which
+    // fields are lookups in two places.
+    private readonly Dictionary<string, List<string>> LookupOptions = new();
+
     protected override async Task OnInitializedAsync()
     {
         CanCreate = await CurrentUser.CanCreateFiltersAsync();
@@ -331,6 +414,10 @@ else
         try
         {
             Assistantes = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+            LookupOptions["famille"] = await FamilleSvc.ListAsync();
+            LookupOptions["franchise"] = await FranchiseSvc.ListAsync();
+            LookupOptions["pays"] = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
+            LookupOptions["assistante_commercial"] = Assistantes;
         }
         catch (Exception ex)
         {
@@ -346,9 +433,9 @@ else
         _ => "text",
     };
 
-    private void OnOperatorChange(string field, ChangeEventArgs e)
+    private void OnOperatorChange(string field, int groupIndex, ChangeEventArgs e)
     {
-        var row = Rows[field];
+        var row = Rows[field][groupIndex];
         var val = e.Value?.ToString();
         row.Operator = string.IsNullOrEmpty(val) ? null : Enum.Parse<Operator>(val);
         // Between is always exactly a (min, max) pair; every other operator
@@ -368,42 +455,67 @@ else
     // Only reachable for the SecondValueLiaison operators (the "+" button
     // isn't rendered otherwise) — Between's two boxes are fixed, not
     // extendable, so this never needs to touch it.
-    private void AddValue(string field) => Rows[field].Values.Add(string.Empty);
+    private void AddValue(string field, int groupIndex) => Rows[field][groupIndex].Values.Add(string.Empty);
 
-    private void RemoveValue(string field, int index) => Rows[field].Values.RemoveAt(index);
+    private void RemoveValue(string field, int groupIndex, int index) => Rows[field][groupIndex].Values.RemoveAt(index);
+
+    // Lets a field carry more than one independent (Operator, Values) group
+    // at once — the only way to express something like "Famille = X OU
+    // Famille <> Y", since one RowState's Operator applies uniformly to
+    // every one of its own Values, not per-value. New group starts liaised
+    // "ou" to the previous one, matching that exact motivating example
+    // (still overridable afterward, same as every other liaison here).
+    private void AddGroup(string field) => Rows[field].Add(new RowState());
+
+    // Always keeps at least one group per field — zero groups would leave
+    // nowhere for that field's Operator dropdown to render at all.
+    private void RemoveGroup(string field, int groupIndex)
+    {
+        var groups = Rows[field];
+        if (groups.Count <= 1) return;
+        groups.RemoveAt(groupIndex);
+    }
 
     private List<Condition> BuildConditions()
     {
         var result = new List<Condition>();
         foreach (var f in ClientFilterService.Fields)
         {
-            var row = Rows[f.Field];
-            if (row.Operator is null) continue;
-            if (string.IsNullOrWhiteSpace(row.Values[0])) continue;
+            // Every group for this field becomes its own Condition —
+            // ClientFilterService groups them back by Field and combines
+            // via each one's GroupLiaison. A field with only its default
+            // single group behaves exactly as before (GroupLiaison simply
+            // goes unused when there's nothing to combine it with).
+            foreach (var row in Rows[f.Field])
+            {
+                if (row.Operator is null) continue;
+                if (string.IsNullOrWhiteSpace(row.Values[0])) continue;
 
-            if (row.Operator == Operator.Between)
-            {
-                if (row.Values.Count < 2 || string.IsNullOrWhiteSpace(row.Values[1])) continue;
-                result.Add(new Condition { Field = f.Field, Operator = row.Operator.Value, Values = new() { row.Values[0], row.Values[1] } });
-                continue;
-            }
+                if (row.Operator == Operator.Between)
+                {
+                    if (row.Values.Count < 2 || string.IsNullOrWhiteSpace(row.Values[1])) continue;
+                    result.Add(new Condition { Field = f.Field, Operator = row.Operator.Value, Values = new() { row.Values[0], row.Values[1] }, GroupLiaison = row.GroupLiaison });
+                    continue;
+                }
 
-            // Blank "extra" boxes (added via "+" then left empty) are
-            // dropped rather than treated as an error — a user shouldn't
-            // have to remove an unused box before searching.
-            var values = new List<string> { row.Values[0] };
-            var isLiaisonOp = ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
-            if (isLiaisonOp)
-            {
-                values.AddRange(row.Values.Skip(1).Where(v => !string.IsNullOrWhiteSpace(v)));
+                // Blank "extra" boxes (added via "+" then left empty) are
+                // dropped rather than treated as an error — a user shouldn't
+                // have to remove an unused box before searching.
+                var values = new List<string> { row.Values[0] };
+                var isLiaisonOp = ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
+                if (isLiaisonOp)
+                {
+                    values.AddRange(row.Values.Skip(1).Where(v => !string.IsNullOrWhiteSpace(v)));
+                }
+                result.Add(new Condition
+                {
+                    Field = f.Field,
+                    Operator = row.Operator.Value,
+                    Values = values,
+                    Liaison = isLiaisonOp ? row.Liaison : null,
+                    GroupLiaison = row.GroupLiaison,
+                });
             }
-            result.Add(new Condition
-            {
-                Field = f.Field,
-                Operator = row.Operator.Value,
-                Values = values,
-                Liaison = isLiaisonOp ? row.Liaison : null,
-            });
         }
         return result;
     }
@@ -412,7 +524,7 @@ else
     {
         foreach (var f in ClientFilterService.Fields)
         {
-            Rows[f.Field] = new RowState();
+            Rows[f.Field] = new List<RowState> { new() };
         }
     }
 

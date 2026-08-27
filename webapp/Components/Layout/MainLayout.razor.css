@@ -5,21 +5,60 @@
     overflow: hidden;
 }
 
+/* Was solid navy — a large flat block of dark color on every single
+   screen reads as a dated "admin dashboard" pattern. Moved the brand
+   color to where it actually means something (the mark, active states,
+   buttons) and let the topbar itself be a light surface, separated from
+   the page below it by a soft shadow instead of a hard border. */
 .topbar {
     display: flex;
     align-items: center;
-    gap: 24px;
-    padding: 0 16px;
-    background: var(--navy);
-    border-bottom: 1px solid var(--navy-border);
+    gap: var(--space-6);
+    padding: 0 var(--space-4);
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
     flex-shrink: 0;
+    position: relative;
+    /* Must outrank .nav-dropdown-backdrop's z-index:1000 (app.css /
+       MainLayout.razor.css below). This position:relative + z-index
+       creates a stacking context for the whole topbar — the dropdown
+       panel's own z-index:1001 only applies *inside* that context, so
+       if the topbar's own z-index is lower than the backdrop's, the
+       backdrop (a fixed, viewport-covering sibling in the root stacking
+       context) paints and receives clicks above the entire topbar,
+       panel included, even though the panel is visually drawn as if on
+       top. Real symptom this caused: the dropdown opens, but every
+       click on an item inside it silently hits the backdrop instead —
+       it just closes the menu instead of navigating. Was z-index: 2
+       (fine before this topbar had any floating child that needed to
+       outrank a fixed overlay) until the Fichiers dropdown revealed it. */
+    z-index: 1002;
 }
 
 .brand {
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--navy);
+    padding: var(--space-3) 0;
+    letter-spacing: -0.01em;
+}
+
+.brand-mark {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--teal), var(--teal-active));
+    color: #ffffff;
     font-size: 13px;
-    color: #e8f1fb;
-    padding: 12px 0;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .nav-links {
@@ -31,12 +70,12 @@
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
 }
 
 .nav-user-name {
     font-size: 12px;
-    color: #9fb4cc;
+    color: var(--header-text);
     white-space: nowrap;
 }
 
@@ -54,14 +93,14 @@
 ::deep .nav-link {
     padding: 10px 14px;
     font-size: 13px;
-    color: #cfe0f2;
+    color: var(--gray-600);
     text-decoration: none;
     border-bottom: 2px solid transparent;
     transition: color 150ms ease, border-color 150ms ease;
 }
 
 ::deep .nav-link:hover {
-    color: #ffffff;
+    color: var(--navy);
 }
 
 ::deep .nav-link-active {
@@ -90,14 +129,14 @@
 
 .nav-dropdown-panel {
     position: absolute;
-    top: calc(100% + 1px);
+    top: calc(100% + 8px);
     left: 0;
-    min-width: 200px;
+    min-width: 210px;
     background: #ffffff;
-    border: 1px solid var(--navy-border);
-    border-radius: 4px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-    padding: 4px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
     display: flex;
     flex-direction: column;
     z-index: 1001;
@@ -108,18 +147,19 @@
     font-size: 13px;
     color: var(--navy);
     text-decoration: none;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     white-space: nowrap;
+    transition: background 150ms ease;
 }
 
 ::deep .nav-dropdown-item:hover {
-    background: #e4eef7;
+    background: var(--header-strong-bg);
 }
 
 ::deep .nav-dropdown-item-active {
     color: var(--teal-active);
     font-weight: 600;
-    background: #e4eef7;
+    background: var(--header-strong-bg);
 }
 
 .nav-dropdown-backdrop {
@@ -128,11 +168,18 @@
     z-index: 1000;
 }
 
+/* Was flush white, same color as every screen's own .page/.form-page
+   content on top of it — zero contrast between "canvas" and "content"
+   anywhere in the app except 1px borders. A soft neutral backdrop plus
+   inset padding turns .page/.form-page into real elevated cards sitting
+   on top of it, instead of edge-to-edge flat content. */
 .app-body {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    background: var(--gray-50);
+    padding: var(--space-5);
     /* auto, not hidden: grid pages (.page) fill this exactly and manage
        their own internal scroll, so this never triggers for them — but
        plain content pages like the client form, with no such internal

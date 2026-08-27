@@ -288,11 +288,11 @@
     </div>
 
     <div class="rc-results table-wrap">
-        <div style="width: @(TotalWidth)px;">
+        <div style="@GridLayout.WrapperStyle(TotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in Columns)
                 {
-                    <div class="cell" style="flex: 0 0 @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">@col.Label</div>
                 }
             </div>
             @if (Loading)
@@ -318,7 +318,7 @@
                          @onclick="() => SelectedCleOpl = c.CleOpl">
                         @foreach (var col in Columns)
                         {
-                            <div class="cell" style="flex: 0 0 @(col.Width)px;">
+                            <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
                                 @if (col.Key == "statuts_clients" && StatutBadgeClass(c.StatutsClients) is { Length: > 0 } badgeClass)
                                 {
                                     <span class="badge @badgeClass">@c.StatutsClients</span>

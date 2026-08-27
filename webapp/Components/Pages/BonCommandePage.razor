@@ -1,0 +1,190 @@
+@page "/bon-commande"
+@inject BonCommandeTemplateService TemplateSvc
+@inject CurrentUserService CurrentUserSvc
+@inject IJSRuntime JS
+
+@* Two independent halves sharing one page, per Badr's explicit choice —
+   see PROGRESS.md's "Bon de Commande generation" entries for the full
+   design conversation before any of this was written:
+   - Source (admin-only): replace the two server-side .xlsx templates.
+     Backed by BonCommandeTemplateService, plain files on disk.
+   - Destination (everyone): grant a local folder via the File System
+     Access API (Chrome/Edge only — feature-detected below) so a later
+     "Générer fichier bon de commande" button (Parcours Client, not
+     built yet) can write straight into it. The grant itself lives in
+     the browser's own IndexedDB (see app.js's mafaliBonCommandeDestination),
+     not this app's database — a directory handle is inherently local to
+     one browser profile, there's nothing meaningful to sync server-side. *@
+
+<PageTitle>Bon de Commande</PageTitle>
+
+<div class="page">
+<div class="toolbar">
+    <span class="title">Bon de Commande</span>
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="bc-sections">
+        @if (IsAdmin)
+        {
+            <div class="bc-card">
+                <p class="bc-section-title">Source — Modèles (serveur)</p>
+                <div class="bc-template-row">
+                    <div class="bc-template-info">
+                        <span class="bc-template-label">Modèle BC Optique</span>
+                        <span class="dimmed">@TemplateStatusText(OptiqueInfo)</span>
+                    </div>
+                    <label class="btn btn-outline" for="bc-optique-input">Remplacer</label>
+                    <InputFile id="bc-optique-input" style="display:none"
+                               OnChange="e => HandleTemplateUpload(BonCommandeTemplateType.Optique, e)" accept=".xlsx" />
+                </div>
+                <div class="bc-template-row">
+                    <div class="bc-template-info">
+                        <span class="bc-template-label">Modèle BC Revendeur</span>
+                        <span class="dimmed">@TemplateStatusText(RevendeurInfo)</span>
+                    </div>
+                    <label class="btn btn-outline" for="bc-revendeur-input">Remplacer</label>
+                    <InputFile id="bc-revendeur-input" style="display:none"
+                               OnChange="e => HandleTemplateUpload(BonCommandeTemplateType.Revendeur, e)" accept=".xlsx" />
+                </div>
+            </div>
+        }
+
+        <div class="bc-card">
+            <p class="bc-section-title">Destination — Dossier local</p>
+            @if (!DestinationChecked)
+            {
+                <p class="dimmed">Vérification du navigateur…</p>
+            }
+            else if (!DestinationSupported)
+            {
+                <p class="dimmed">
+                    Cette fonctionnalité (choix direct d'un dossier) nécessite Google Chrome ou
+                    Microsoft Edge. Dans les autres navigateurs, "Générer fichier bon de commande"
+                    utilisera un téléchargement classique à la place.
+                </p>
+            }
+            else
+            {
+                <p class="dimmed">
+                    @(DestinationFolderName is not null ? $"Dossier actuel : {DestinationFolderName}" : "Aucun dossier sélectionné.")
+                </p>
+                <button class="btn btn-default" @onclick="PickDestinationFolder">
+                    @(DestinationFolderName is not null ? "Changer de dossier" : "Choisir un dossier")
+                </button>
+            }
+        </div>
+    </div>
+}
+</div>
+
+@code {
+    private const long MaxTemplateFileSize = 20 * 1024 * 1024;
+
+    private bool Loading = true;
+    private bool IsAdmin;
+    private string? Error;
+
+    private BonCommandeTemplateInfo? OptiqueInfo;
+    private BonCommandeTemplateInfo? RevendeurInfo;
+
+    private bool DestinationChecked;
+    private bool DestinationSupported;
+    private string? DestinationFolderName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            IsAdmin = await CurrentUserSvc.IsAdminAsync();
+            if (IsAdmin)
+            {
+                OptiqueInfo = TemplateSvc.GetInfo(BonCommandeTemplateType.Optique);
+                RevendeurInfo = TemplateSvc.GetInfo(BonCommandeTemplateType.Revendeur);
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    // JS interop isn't available until after the first render in Blazor
+    // Server (the SignalR circuit has to actually be up) — same reason
+    // every other JS-interop-on-load pattern in this app uses
+    // OnAfterRenderAsync(firstRender), not OnInitializedAsync.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        DestinationSupported = await JS.InvokeAsync<bool>("mafaliBonCommandeDestination.isSupported");
+        if (DestinationSupported)
+        {
+            DestinationFolderName = await JS.InvokeAsync<string?>("mafaliBonCommandeDestination.getCurrentFolderName");
+        }
+        DestinationChecked = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleTemplateUpload(BonCommandeTemplateType type, InputFileChangeEventArgs e)
+    {
+        // Backstop, not the real gate — the InputFile is only ever rendered
+        // for admins (IsAdmin check above), matching Clients.razor's
+        // Importer. Checked again here anyway since this is the one place
+        // that actually decides whether the file gets written.
+        if (!IsAdmin) return;
+        Error = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(MaxTemplateFileSize);
+            await TemplateSvc.SaveAsync(type, stream);
+            if (type == BonCommandeTemplateType.Optique)
+            {
+                OptiqueInfo = TemplateSvc.GetInfo(type);
+            }
+            else
+            {
+                RevendeurInfo = TemplateSvc.GetInfo(type);
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    private async Task PickDestinationFolder()
+    {
+        Error = null;
+        try
+        {
+            var name = await JS.InvokeAsync<string?>("mafaliBonCommandeDestination.pickFolder");
+            if (name is not null)
+            {
+                DestinationFolderName = name;
+            }
+        }
+        catch (Exception)
+        {
+            Error = "Impossible de sélectionner le dossier.";
+        }
+    }
+
+    private static string TemplateStatusText(BonCommandeTemplateInfo? info) =>
+        info is { Exists: true }
+            ? $"{info.FileName} — mis à jour le {info.LastModifiedUtc!.Value.ToLocalTime():dd/MM/yyyy HH:mm}"
+            : "Aucun fichier";
+}

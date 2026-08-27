@@ -6,6 +6,7 @@ using MafaliCrm.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,19 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Without this, ASP.NET Core generates a fresh in-memory DataProtection
+// key on every process start — which silently invalidates every existing
+// auth cookie (the cookie's encryption key is gone), logging everyone out
+// on every restart even though nothing about their session actually
+// expired. Confirmed as the exact cause of a real disruption during Bon
+// de Commande testing (2026-08-26, see PROGRESS.md) — every `dotnet run`
+// restart to pick up a code change forced a fresh login. Same AppData
+// folder convention as BonCommandeTemplateService (outside wwwroot,
+// gitignored via the existing `webapp/AppData/` entry).
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "AppData", "DataProtectionKeys")))
+    .SetApplicationName("MafaliCrm");
 
 // Cookie auth, not the legacy's plaintext-password GPW component (see
 // database/05_users_and_roles.sql and PROGRESS.md for the full reasoning).
@@ -63,6 +77,7 @@ builder.Services.AddScoped<HistoriqueService>();
 builder.Services.AddScoped<CaService>();
 builder.Services.AddScoped<ClientImportExportService>();
 builder.Services.AddScoped<RappelService>();
+builder.Services.AddScoped<BonCommandeTemplateService>();
 
 var app = builder.Build();
 

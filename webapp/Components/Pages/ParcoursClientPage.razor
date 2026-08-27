@@ -10,17 +10,26 @@
 @inject FranchiseService FranchiseSvc
 @inject PaysService PaysSvc
 @inject AssistanteService AssistanteSvc
+@inject BonCommandeTemplateService BcTemplateSvc
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 @* Mirrors Fen_Parcours_Client — the daily "browse a result set, log an
    interaction" screen, the most business-logic-dense window in the legacy
    app. Traced field-by-field against the real WinDev doc, not guessed.
-   Three things are deliberately out of scope for now, confirmed with Badr:
-   Adhérent (doesn't exist anywhere in our schema — never migrated),
-   "Voir le Fichier Stocké" (file attachments — historique.fic_stk exists
-   and is ready, just unused), and postal-code auto-lookup (no dataset
-   exists anywhere in this repo). All three are meant to come back later,
-   not permanently dropped.
+   Two things are deliberately out of scope for now, confirmed with Badr:
+   Adhérent (doesn't exist anywhere in our schema — never migrated) and
+   postal-code auto-lookup (no dataset exists anywhere in this repo). Both
+   are meant to come back later, not permanently dropped.
+
+   File attachments (historique.fic_stk) are implemented — see
+   FileAttachStatuses / OnStatusChange / DownloadStoredFile below. Matches
+   the legacy doc (line 91 of the functional spec): selecting Devis en
+   cours / Vente (BAT Signé) / Vente (BAT Original) / Vente (Bon de
+   Commande) opens a file picker; cancelling reverts the status. Adapted
+   for the web: a native OS file dialog can't pop mid-save here, so it's a
+   modal with an <InputFile>, blocking the rest of the page the same way
+   the Mois/Date reminder prompts already do.
 
    List hand-off: the legacy reads its client list straight out of the
    *calling* window's memory (opened as a literal sibling with shared field
@@ -128,6 +137,7 @@ else if (Client is not null)
         <div class="alert">@Error</div>
     }
 
+    <div class="pc-body-wrap">
     <div class="pc-body">
         <div class="pc-col">
             <h4 class="pc-col-title">Identité / Adresse</h4>
@@ -151,25 +161,6 @@ else if (Client is not null)
                 <label>Complement</label>
                 <input class="text-input" maxlength="60" value="@Client.Complement" disabled="@InterModifClientDisabled"
                        @oninput="e => Client!.Complement = e.Value?.ToString()" />
-            </div>
-            <div class="pc-field-row">
-                <div class="pc-field">
-                    <label>SIRET</label>
-                    <input class="text-input" maxlength="14" value="@Client.Siret" disabled="@InterModifClientDisabled"
-                           @oninput="e => Client!.Siret = e.Value?.ToString()" />
-                </div>
-                <div class="pc-field">
-                    <label>SIREN</label>
-                    <input class="text-input" maxlength="9" value="@Client.Siren" disabled="@InterModifClientDisabled"
-                           @oninput="e => Client!.Siren = e.Value?.ToString()" />
-                </div>
-            </div>
-            <div class="pc-field">
-                <label class="checkbox-label">
-                    <input type="checkbox" checked="@Client.FacturationElectronique" disabled="@InterModifClientDisabled"
-                           @onchange="e => Client!.FacturationElectronique = (bool)(e.Value ?? false)" />
-                    Facturation Électronique
-                </label>
             </div>
             <div class="pc-field">
                 <label>Rue</label>
@@ -397,8 +388,8 @@ else if (Client is not null)
                     Modifier la Note
                 </label>
                 <label>Notes :</label>
-                <input class="text-input" maxlength="250" value="@Client.Note" disabled="@(!InterModifNote)"
-                       @oninput="e => Client!.Note = e.Value?.ToString()" />
+                <textarea class="text-input" rows="4" value="@Client.Note" disabled="@(!InterModifNote)"
+                          @oninput="e => Client!.Note = e.Value?.ToString()"></textarea>
             </div>
         </div>
 
@@ -441,18 +432,54 @@ else if (Client is not null)
                        @onchange="e => InterMajClient = (bool)(e.Value ?? false)" />
                 Mettre à jour les informations du client
             </label>
+            <div class="pc-field-row" style="margin-top: 12px;">
+                <div class="pc-field">
+                    <label>SIRET</label>
+                    <input class="text-input" maxlength="14" value="@Client.Siret" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Siret = e.Value?.ToString()" />
+                </div>
+                <div class="pc-field">
+                    <label>SIREN</label>
+                    <input class="text-input" maxlength="9" value="@Client.Siren" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Siren = e.Value?.ToString()" />
+                </div>
+            </div>
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>TVA</label>
+                    <input class="text-input" maxlength="20" value="@Client.Tva" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Tva = e.Value?.ToString()" />
+                </div>
+            </div>
+            <div class="pc-field">
+                <label class="checkbox-label">
+                    <input type="checkbox" checked="@Client.FacturationElectronique" disabled="@InterModifClientDisabled"
+                           @onchange="e => Client!.FacturationElectronique = (bool)(e.Value ?? false)" />
+                    Facturation Électronique
+                </label>
+            </div>
             <a href="/recherche-client" target="_blank" class="btn btn-default" style="width: 100%; margin-top: 12px; display: inline-block; text-decoration: none; text-align: center;">
                 Rechercher un Client
             </a>
         </div>
+    </div>
+    @if (Client.Bloque)
+    {
+        <div class="pc-blocked-overlay">
+            <span class="pc-blocked-text">Enregistrement bloqué</span>
+        </div>
+    }
     </div>
 
     <div class="pc-actions">
         <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/clients/new")'>Nouveau</button>
         <button class="btn btn-default" @onclick="Cancel">Annuler</button>
         <button class="btn btn-primary" disabled="@(Submitting || Client.Bloque)" @onclick="OpenApplyConfirm">Appliquer</button>
-        <button class="btn btn-default" disabled="@(SelectedHistoId is null)" title="Fonctionnalité à venir — le stockage existe déjà en base, pas encore l'interface">
+        <button class="btn btn-default" disabled="@(SelectedHistoId is null)" @onclick="DownloadStoredFile">
             Voir le Fichier Stocké
+        </button>
+        <button class="btn btn-default" disabled="@Client.Bloque" @onclick="() => BcChoiceOpen = true">
+            Générer fichier bon de commande
         </button>
         <button class="btn btn-default" @onclick="Close">Fermer</button>
     </div>
@@ -552,6 +579,56 @@ else if (Client is not null)
             <div class="modal-actions">
                 <button class="btn btn-default" @onclick="() => DatePromptOpen = false">Annuler</button>
                 <button class="btn btn-primary" @onclick="ConfirmDatePrompt">Valider</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (AttachFilePromptOpen)
+{
+    <div class="modal-backdrop" @onclick="CancelAttachPrompt">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Fichier requis</h3>
+            <p class="confirm-text">
+                Un fichier doit être joint pour le statut « @Client?.StatusVente ».
+            </p>
+            <label class="btn btn-primary" for="fic-stk-file-input">Choisir un fichier</label>
+            <InputFile id="fic-stk-file-input" style="display:none" OnChange="HandleAttachmentFile" />
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="CancelAttachPrompt">Annuler</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (BcChoiceOpen)
+{
+    <div class="modal-backdrop" @onclick="() => BcChoiceOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Bon de Commande</h3>
+            <p class="confirm-text">Quel modèle utiliser ?</p>
+            @if (BcError is not null)
+            {
+                <div class="alert">@BcError</div>
+            }
+            <div class="modal-actions">
+                <button class="btn btn-default" disabled="@BcGenerating" @onclick="() => BcChoiceOpen = false">Annuler</button>
+                <button class="btn btn-primary" disabled="@BcGenerating" @onclick='() => GenerateBonCommande(BonCommandeTemplateType.Optique)'>Optique</button>
+                <button class="btn btn-primary" disabled="@BcGenerating" @onclick='() => GenerateBonCommande(BonCommandeTemplateType.Revendeur)'>Revendeur</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (BcOpenPromptOpen)
+{
+    <div class="modal-backdrop" @onclick="() => BcOpenPromptOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Bon de Commande</h3>
+            <p class="confirm-text">Fichier généré dans « @BcSuccessFolder ». Voulez-vous l'ouvrir ?</p>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="() => BcOpenPromptOpen = false">Non</button>
+                <button class="btn btn-primary" @onclick="OpenGeneratedBc">Oui</button>
             </div>
         </div>
     </div>
@@ -687,8 +764,13 @@ else if (Client is not null)
 
     private record ColumnDef(string Key, string Label, int Width);
 
-    // Exact order from the real Fen_Parcours_Client doc's own numbered
-    // Table_Histo column list (1 through 10).
+    // Order from the real Fen_Parcours_Client doc's own numbered
+    // Table_Histo column list, columns 1-9 — deliberately dropped the
+    // legacy's 10th, Id_Histo: it's just the row's internal database
+    // surrogate key, not a business-meaningful value staff would ever
+    // read or reference (unlike N° Client), and it already doubles as
+    // the row's selection key (SelectedHistoId below) without needing to
+    // be a visible column for that.
     private readonly List<ColumnDef> HistoColumns = new()
     {
         new("num_client", "N° Client", 90),
@@ -700,7 +782,6 @@ else if (Client is not null)
         new("operation", "Opération", 220),
         new("status_vente", "Status Vente", 140),
         new("note", "Note", 260),
-        new("id_histo", "Id_Histo", 90),
     };
 
     private int HistoTotalWidth => HistoColumns.Sum(c => c.Width);
@@ -766,6 +847,27 @@ else if (Client is not null)
     private bool DatePromptOpen;
     private DateOnly DatePromptValue = DateOnly.FromDateTime(DateTime.Today);
 
+    // 20 MB, matching Clients.razor's Excel-import cap (MaxImportFileSize)
+    // — same reasoning: comfortably above any realistic devis/BAT/bon de
+    // commande scan, just a sanity ceiling.
+    private const long MaxAttachmentFileSize = 20 * 1024 * 1024;
+    private static readonly HashSet<string> FileAttachStatuses = new()
+    {
+        "Devis en cours", "Vente (BAT Signé)", "Vente (BAT Original)", "Vente (Bon de Commande)",
+    };
+    private bool AttachFilePromptOpen;
+    private string? PreviousStatusVente;
+    private byte[]? PendingAttachmentBytes;
+    private string? PendingAttachmentFileName;
+
+    private bool BcChoiceOpen;
+    private bool BcGenerating;
+    private string? BcError;
+    private bool BcOpenPromptOpen;
+    private string? BcSuccessFolder;
+    private byte[]? PendingBcBytes;
+    private string? PendingBcFileName;
+
     private bool CaModalOpen;
     private long? CaSelectedIdCa;
     private bool CaEditFormOpen;
@@ -782,7 +884,7 @@ else if (Client is not null)
     private bool BlockedGate => Client?.Bloque ?? false;
     private bool MajDisabled => BlockedGate;
     private bool InterModifClientDisabled => BlockedGate || !InterMajClient;
-    private bool StatusDisabled => BlockedGate || Client?.OpEnCours != "Vente en Cours";
+    private bool StatusDisabled => BlockedGate || (!InterMajClient && Client?.OpEnCours != "Vente en Cours");
     private int YearMinus1 => DateTime.Today.Year - 1;
     private int YearMinus2 => DateTime.Today.Year - 2;
 
@@ -875,6 +977,16 @@ else if (Client is not null)
             InterMajClient = false;
             InterModifNote = false;
             ShowProduction = Client.StatusVente == "Production";
+            AttachFilePromptOpen = false;
+            PreviousStatusVente = null;
+            PendingAttachmentBytes = null;
+            PendingAttachmentFileName = null;
+            BcChoiceOpen = false;
+            BcError = null;
+            BcOpenPromptOpen = false;
+            BcSuccessFolder = null;
+            PendingBcBytes = null;
+            PendingBcFileName = null;
             CaModalOpen = false;
             CaSelectedIdCa = null;
             CaEditFormOpen = false;
@@ -994,14 +1106,150 @@ else if (Client is not null)
     {
         if (Client is null) return;
         var v = e.Value?.ToString();
+        var previous = Client.StatusVente;
         Client.StatusVente = v == "-1" ? "-1" : v;
         ShowProduction = Client.StatusVente == "Production";
         if (Client.StatusVente == "Vente Annulée")
         {
             Client.DateRappel = DateOnly.FromDateTime(DateTime.Today.AddMonths(4));
         }
-        // Devis en cours / Vente (BAT Signé)/(BAT Original)/(Bon de Commande) trigger a
-        // file-picker in the legacy — deliberately skipped here, file attachments deferred.
+
+        // Devis en cours / Vente (BAT Signé)/(BAT Original)/(Bon de Commande): the
+        // legacy opens a file picker on selection and reverts the status if the
+        // user cancels file selection (functional spec line 91). PreviousStatusVente
+        // is what CancelAttachPrompt restores on Annuler or a backdrop click —
+        // there's no separate "confirm" step, picking a file resolves it, same as
+        // an OS file dialog closing on its own "Open" click.
+        if (Client.StatusVente is not null && FileAttachStatuses.Contains(Client.StatusVente))
+        {
+            PreviousStatusVente = previous;
+            PendingAttachmentBytes = null;
+            PendingAttachmentFileName = null;
+            AttachFilePromptOpen = true;
+        }
+    }
+
+    private void CancelAttachPrompt()
+    {
+        if (Client is not null)
+        {
+            Client.StatusVente = PreviousStatusVente;
+            ShowProduction = Client.StatusVente == "Production";
+        }
+        AttachFilePromptOpen = false;
+        PendingAttachmentBytes = null;
+        PendingAttachmentFileName = null;
+    }
+
+    private async Task HandleAttachmentFile(InputFileChangeEventArgs e)
+    {
+        Error = null;
+        try
+        {
+            using var buffered = new MemoryStream();
+            await e.File.OpenReadStream(MaxAttachmentFileSize).CopyToAsync(buffered);
+            PendingAttachmentBytes = buffered.ToArray();
+            PendingAttachmentFileName = e.File.Name;
+            AttachFilePromptOpen = false;
+        }
+        catch (IOException)
+        {
+            Error = "Le fichier dépasse la taille maximale autorisée (20 Mo). Choisissez un autre fichier.";
+        }
+    }
+
+    private async Task DownloadStoredFile()
+    {
+        if (SelectedHistoId is null) return;
+        Error = null;
+        var histo = await HistoriqueSvc.GetByIdAsync(SelectedHistoId.Value);
+        if (histo?.FicStk is null || histo.FicStk.Length == 0)
+        {
+            Error = "Aucun fichier n'est associé à cet enregistrement.";
+            return;
+        }
+        using var stream = new MemoryStream(histo.FicStk);
+        using var streamRef = new DotNetStreamReference(stream);
+        var fileName = string.IsNullOrWhiteSpace(histo.FicStkNom) ? $"fichier_{histo.IdHisto}" : histo.FicStkNom;
+        await JS.InvokeVoidAsync("mafaliFileDownload.downloadFileFromStream", fileName, "application/octet-stream", streamRef);
+    }
+
+    private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    private async Task GenerateBonCommande(BonCommandeTemplateType type)
+    {
+        if (Client is null) return;
+        BcError = null;
+        BcGenerating = true;
+        try
+        {
+            var templateBytes = await BcTemplateSvc.GetBytesAsync(type);
+            if (templateBytes is null)
+            {
+                BcError = $"Aucun modèle configuré pour « {(type == BonCommandeTemplateType.Optique ? "Optique" : "Revendeur")} ». Contactez un administrateur.";
+                return;
+            }
+
+            var filled = await BcTemplateSvc.FillAsync(templateBytes, Client, type);
+            var fileName = $"BC_{Client.CleOpl}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+
+            var supported = await JS.InvokeAsync<bool>("mafaliBonCommandeDestination.isSupported");
+            var folderName = supported ? await JS.InvokeAsync<string?>("mafaliBonCommandeDestination.getCurrentFolderName") : null;
+
+            if (supported && folderName is not null)
+            {
+                using var stream = new MemoryStream(filled);
+                using var streamRef = new DotNetStreamReference(stream);
+                var result = await JS.InvokeAsync<string>("mafaliBonCommandeDestination.writeFile", fileName, streamRef);
+                if (result == "ok")
+                {
+                    BcChoiceOpen = false;
+                    PendingBcBytes = filled;
+                    PendingBcFileName = fileName;
+                    BcSuccessFolder = folderName;
+                    BcOpenPromptOpen = true;
+                    return;
+                }
+
+                // Grant expired/denied, or the write itself failed for some other
+                // reason — fall back to a normal download rather than leaving the
+                // user stuck, same as the no-folder-chosen-yet path below.
+                await DownloadBonCommandeBytes(filled, fileName);
+                InfoMessage = "Fichier téléchargé (le dossier configuré n'était plus accessible — vous pouvez le choisir à nouveau depuis la page Bon de Commande).";
+            }
+            else
+            {
+                await DownloadBonCommandeBytes(filled, fileName);
+                InfoMessage = "Fichier téléchargé.";
+            }
+            BcChoiceOpen = false;
+        }
+        catch (Exception ex)
+        {
+            BcError = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            BcGenerating = false;
+        }
+    }
+
+    private async Task OpenGeneratedBc()
+    {
+        BcOpenPromptOpen = false;
+        if (PendingBcBytes is not null && PendingBcFileName is not null)
+        {
+            await DownloadBonCommandeBytes(PendingBcBytes, PendingBcFileName);
+        }
+        PendingBcBytes = null;
+        PendingBcFileName = null;
+    }
+
+    private async Task DownloadBonCommandeBytes(byte[] bytes, string fileName)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var streamRef = new DotNetStreamReference(stream);
+        await JS.InvokeVoidAsync("mafaliFileDownload.downloadFileFromStream", fileName, XlsxContentType, streamRef);
     }
 
     private void ConfirmMonths()
@@ -1086,9 +1334,22 @@ else if (Client is not null)
                     "Vente en Cours" => "Vente en Cours",
                     _ => null,
                 },
-                StatusVente = Client.OpEnCours == "Vente en Cours" ? Client.StatusVente : null,
+                // Was gated on OpEnCours == "Vente en Cours" (the legacy's own rule,
+                // functional spec line 105: "status (if Vente en Cours)"), back when
+                // that was the only way to touch Status de la Vente at all. Now that
+                // "Mettre à jour les informations du client" can unlock it
+                // independently (see StatusDisabled), that gate started dropping real
+                // status values from the historique snapshot — including the status a
+                // freshly-attached file (FicStk, below) was actually attached for.
+                // Gate on the field's own real/sentinel distinction instead: record
+                // whenever there's an actual status, regardless of which path set it.
+                StatusVente = Client.StatusVente is null or "-1" ? null : Client.StatusVente,
+                FicStk = PendingAttachmentBytes,
+                FicStkNom = PendingAttachmentBytes is not null ? PendingAttachmentFileName : null,
             };
             await HistoriqueSvc.CreateAsync(Client.CleOpl, histo);
+            PendingAttachmentBytes = null;
+            PendingAttachmentFileName = null;
 
             // Matches the legacy: a successful Appliquer auto-advances to the
             // next record (ExécuteTraitement(Suivant, trtClic)) instead of

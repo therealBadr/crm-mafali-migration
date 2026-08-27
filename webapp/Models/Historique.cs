@@ -39,6 +39,8 @@ public partial class Historique
 
     public byte[]? FicStk { get; set; }
 
+    public string? FicStkNom { get; set; }
+
     public DateTime? DeletedAt { get; set; }
 
     public virtual FranceOptique NumClientNavigation { get; set; } = null!;

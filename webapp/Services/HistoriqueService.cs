@@ -26,6 +26,8 @@ public class HistoriqueInput
     public string? AssistanteCommercial { get; set; }
     public string? MagasinPrincipal { get; set; }
     public string? StatutsClients { get; set; }
+    public byte[]? FicStk { get; set; }
+    public string? FicStkNom { get; set; }
 
     public static HistoriqueInput FromEntity(Historique h) => new()
     {
@@ -43,6 +45,8 @@ public class HistoriqueInput
         AssistanteCommercial = h.AssistanteCommercial,
         MagasinPrincipal = h.MagasinPrincipal,
         StatutsClients = h.StatutsClients,
+        FicStk = h.FicStk,
+        FicStkNom = h.FicStkNom,
     };
 }
 
@@ -78,6 +82,7 @@ public class HistoriqueService
             .Where(h => h.NumClient == numClient && h.DeletedAt == null)
             .OrderByDescending(h => h.DateSaisie)
             .ThenByDescending(h => h.HeureSaisie)
+            .Select(WithoutFicStk)
             .ToListAsync();
     }
 
@@ -105,8 +110,37 @@ public class HistoriqueService
         return await query
             .OrderByDescending(h => h.IdHisto)
             .Take(count)
+            .Select(WithoutFicStk)
             .ToListAsync();
     }
+
+    // Grid views never display the attachment itself, only whether one
+    // exists (via FicStkNom) — excluding the actual bytea here keeps a
+    // page of history rows cheap even once real attachments (up to 20 MB
+    // each, see ParcoursClientPage's MaxAttachmentFileSize) start
+    // accumulating. GetByIdAsync deliberately does NOT use this — it's
+    // the one path that needs the real bytes, for download.
+    private static readonly System.Linq.Expressions.Expression<Func<Historique, Historique>> WithoutFicStk = h => new Historique
+    {
+        IdHisto = h.IdHisto,
+        NumClient = h.NumClient,
+        DateSaisie = h.DateSaisie,
+        HeureSaisie = h.HeureSaisie,
+        AssistanteCommercial = h.AssistanteCommercial,
+        DateRappel = h.DateRappel,
+        HeureRappel = h.HeureRappel,
+        Operation = h.Operation,
+        StatusVente = h.StatusVente,
+        Note = h.Note,
+        Franchise = h.Franchise,
+        RaisonSociale = h.RaisonSociale,
+        Cp = h.Cp,
+        Ville = h.Ville,
+        StatutsClients = h.StatutsClients,
+        MagasinPrincipal = h.MagasinPrincipal,
+        FicStkNom = h.FicStkNom,
+        DeletedAt = h.DeletedAt,
+    };
 
     public async Task<int> GetCountAsync()
     {
@@ -210,5 +244,7 @@ public class HistoriqueService
         entity.AssistanteCommercial = input.AssistanteCommercial;
         entity.MagasinPrincipal = input.MagasinPrincipal;
         entity.StatutsClients = input.StatutsClients;
+        entity.FicStk = input.FicStk;
+        entity.FicStkNom = input.FicStkNom;
     }
 }

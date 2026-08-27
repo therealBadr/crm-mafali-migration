@@ -172,3 +172,105 @@ window.mafaliColumnResize = {
         }
     }
 };
+
+// Backs the Bon de Commande page's Destination section and (later) the
+// "Générer fichier bon de commande" button on Parcours Client. The File
+// System Access API's directory handle is a browser object with no
+// server-side equivalent — it's inherently local to one browser profile,
+// so it's persisted in this browser's own IndexedDB, not this app's
+// database. Chrome/Edge only; isSupported() is how the Razor page decides
+// whether to show the folder picker or fall back to a plain download.
+window.mafaliBonCommandeDestination = {
+    isSupported: function () {
+        return 'showDirectoryPicker' in window;
+    },
+
+    // User-gesture-triggered (called from a Blazor @onclick handler) —
+    // showDirectoryPicker() throws SecurityError outside a user activation
+    // window, which the click → C# → JS round-trip stays inside of as long
+    // as it resolves quickly (the standard, documented way Blazor Server
+    // apps use this API). Returns null (not a thrown error) if the user
+    // just cancels the native picker — that's not a failure.
+    pickFolder: async function () {
+        let handle;
+        try {
+            handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        } catch (e) {
+            if (e.name === 'AbortError') return null;
+            throw e;
+        }
+        await this._storeHandle(handle);
+        return handle.name;
+    },
+
+    // Display-only — does not re-verify the permission is still granted
+    // (that happens at actual write time, in writeFile below). Returns
+    // null if no folder has ever been granted.
+    getCurrentFolderName: async function () {
+        const handle = await this._getStoredHandle();
+        return handle ? handle.name : null;
+    },
+
+    // Called from "Générer fichier bon de commande" once bytes are ready.
+    // Returns a short status string instead of throwing, so the C# side
+    // can decide what to show without needing exception-shaped plumbing
+    // over JS interop for expected outcomes (no folder yet, permission
+    // lost) vs genuine errors. Re-requests permission every time rather
+    // than trusting the original grant — it can silently expire, and this
+    // still happens inside the same click → C# → JS chain as the
+    // template-choice button, so it stays inside the user-activation
+    // window the same way pickFolder does.
+    writeFile: async function (fileName, streamRef) {
+        const handle = await this._getStoredHandle();
+        if (!handle) return 'no-folder';
+
+        let permission;
+        try {
+            permission = await handle.requestPermission({ mode: 'readwrite' });
+        } catch (e) {
+            return 'permission-error';
+        }
+        if (permission !== 'granted') return 'permission-denied';
+
+        try {
+            const arrayBuffer = await streamRef.arrayBuffer();
+            const fileHandle = await handle.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(arrayBuffer);
+            await writable.close();
+            return 'ok';
+        } catch (e) {
+            return 'write-error';
+        }
+    },
+
+    _dbPromise: null,
+    _openDb: function () {
+        if (this._dbPromise) return this._dbPromise;
+        this._dbPromise = new Promise((resolve, reject) => {
+            const req = indexedDB.open('mafali-bon-commande', 1);
+            req.onupgradeneeded = () => req.result.createObjectStore('handles');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        return this._dbPromise;
+    },
+    _storeHandle: async function (handle) {
+        const db = await this._openDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('handles', 'readwrite');
+            tx.objectStore('handles').put(handle, 'destinationFolder');
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    },
+    _getStoredHandle: async function () {
+        const db = await this._openDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('handles', 'readonly');
+            const req = tx.objectStore('handles').get('destinationFolder');
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+};
