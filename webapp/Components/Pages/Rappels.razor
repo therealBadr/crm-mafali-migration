@@ -1,17 +1,18 @@
 @page "/rappels"
 @inject RappelService RappelSvc
+@inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
 
 @* New screen, not a legacy port — the closest legacy equivalent is
    Fen_Rappel (module 8), but that window's own query (REQ_RappelRDV) is an
    exact Date_Rappel = today match with no overdue rollup, a documented
-   shortcoming rather than a design worth reproducing. See
-   RappelService.cs for the actual query and the "why <= today, why no
-   per-user filter yet" reasoning — not repeated here. *@
+   shortcoming rather than a design worth reproducing. See RappelService.cs
+   for the actual query and the per-user filtering reasoning (added
+   2026-09-02) — not repeated here. *@
 
 <PageTitle>Rappels</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Rappels</span>
     <div class="actions">
@@ -39,10 +40,13 @@ else
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in Columns)
                 {
-                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">@col.Label</div>
+                    <div class="cell @Sort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])" @onclick='() => Sort.Toggle(col.Key)'>
+                        @col.Label @Sort.ArrowFor(col.Key)
+                        <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                    </div>
                 }
             </div>
-            @foreach (var c in Items)
+            @foreach (var c in SortedItems)
             {
                 <div class="row" @onclick="() => OpenParcours(c.CleOpl)">
                     @foreach (var col in Columns)
@@ -94,6 +98,10 @@ else
     private bool Loading = true;
     private string? Error;
     private DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
+
+    private List<FranceOptique> SortedItems => GridSort.Apply(GridFilter.Apply(Items, Filter, GetCellText), Sort, GetCellText);
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -102,7 +110,8 @@ else
         Loading = true;
         try
         {
-            Items = await RappelSvc.ListDueAsync();
+            var login = await CurrentUser.GetLoginAsync();
+            Items = login is null ? new() : await RappelSvc.ListDueAsync(login);
             Error = null;
         }
         catch (Exception ex)
@@ -119,6 +128,7 @@ else
 
     private static string GetCellText(FranceOptique c, string key) => key switch
     {
+        "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
         "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
         "cle_opl" => c.CleOpl.ToString(),
         "raison_sociale" => c.RaisonSociale ?? "",

@@ -1,5 +1,6 @@
 @page "/clients/new"
 @page "/clients/{CleOpl:long}/edit"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject ClientService ClientSvc
 @inject PaysService PaysSvc
 @inject FamilleService FamilleSvc
@@ -107,6 +108,13 @@
             <label for="f-repr">Représentant</label>
             <input id="f-repr" class="text-input" maxlength="100" value="@Input.Representant"
                    @oninput="e => Input.Representant = e.Value?.ToString()" />
+
+            <label for="f-etat">Etat Client</label>
+            <select id="f-etat" class="text-input" value="@(Input.EtatClient == "1" ? "1" : "2")"
+                    @onchange="e => Input.EtatClient = e.Value?.ToString()">
+                <option value="1">Client</option>
+                <option value="2">Prospect</option>
+            </select>
         </div>
 
         @if (Error is not null)
@@ -154,7 +162,13 @@
     private bool Loading = true;
     private bool Submitting;
     private string? Error;
-    private ClientInput Input = new();
+    // EtatClient = "2" (Prospect) here specifically for the brand-new-client
+    // starting state — a genuinely new record has no prior legacy value to
+    // preserve, unlike editing an existing client (IsEditMode overwrites
+    // this whole object via ClientInput.FromEntity, whose own EtatClient
+    // stays exactly whatever the DB already had — see that method's
+    // comment for why the two cases are handled differently).
+    private ClientInput Input = new() { EtatClient = "2" };
     private ClientInput? Baseline;
     private List<string> PaysOptions = new();
     private List<string> FamilleOptions = new();

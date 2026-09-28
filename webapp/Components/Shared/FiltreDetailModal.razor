@@ -1,4 +1,5 @@
 @inject FiltreOperatriceService FiltreSvc
+@inject FiltreHistoriqueService FiltreHistoSvc
 
 @* Mirrors Fen_Detail_Filtre, opened from two different places in the legacy:
    - Fen_Definir_Filtre's "Enregistrer le Filtre en Cours" (Mode="search-save"):
@@ -8,7 +9,12 @@
    - Fen_Fichier_Filtre's Nouveau/Modifier (Mode="standalone"): Filtre_Réel is
      a normal free-text field, exactly like the real migrated data (hand-typed
      condition strings, inconsistent spacing/casing between rows — genuinely
-     free text in the legacy, not a structured value). *@
+     free text in the legacy, not a structured value).
+
+   Also shared between the Client and Historique filter screens (Target
+   parameter picks which table's CRUD service backs Submit) — same window,
+   same fields, same 512-char Filtre Réel limit in the legacy for both, just
+   a different destination table. *@
 
 @if (Opened && !ConflictDialogOpen)
 {
@@ -84,6 +90,10 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public List<string> Assistantes { get; set; } = new();
     [Parameter] public string Mode { get; set; } = "standalone";
+    // "client" (filtre_operatrice, via FiltreSvc) or "historique"
+    // (filtre_historique, via FiltreHistoSvc) — same window and fields
+    // either way, just a different destination table/service.
+    [Parameter] public string Target { get; set; } = "client";
     [Parameter] public string? InitialNomOperateur { get; set; }
     [Parameter] public string? InitialNomFiltre { get; set; }
     [Parameter] public string? InitialFiltreReel { get; set; }
@@ -96,7 +106,8 @@
     private string? ModalError;
     private bool Submitting;
     private bool _wasOpened;
-    private FiltreOperatriceInput? _baseline;
+    private FiltreOperatriceInput? _baselineClient;
+    private FiltreHistoriqueInput? _baselineHistorique;
     private bool ConflictDialogOpen;
     private List<FieldConflict> Conflicts = new();
 
@@ -112,9 +123,13 @@
             NomFiltre = InitialNomFiltre ?? string.Empty;
             FiltreReel = InitialFiltreReel ?? string.Empty;
             // Same values as above, snapshotted separately for the conflict
-            // check — only meaningful in edit mode (OriginalKey set).
-            _baseline = OriginalKey is not null
+            // check — only meaningful in edit mode (OriginalKey set). Only
+            // one of these two is ever populated, based on Target.
+            _baselineClient = OriginalKey is not null && Target != "historique"
                 ? new FiltreOperatriceInput { NomOperateur = InitialNomOperateur ?? string.Empty, NomFiltre = InitialNomFiltre ?? string.Empty, FiltreReel = InitialFiltreReel ?? string.Empty }
+                : null;
+            _baselineHistorique = OriginalKey is not null && Target == "historique"
+                ? new FiltreHistoriqueInput { NomOperateur = InitialNomOperateur ?? string.Empty, NomFiltre = InitialNomFiltre ?? string.Empty, FiltreReel = InitialFiltreReel ?? string.Empty }
                 : null;
             ModalError = null;
             ConflictDialogOpen = false;
@@ -146,6 +161,22 @@
         ConflictDialogOpen = false;
         Conflicts = new();
         if (OriginalKey is not { } key) return;
+
+        if (Target == "historique")
+        {
+            var freshHisto = await FiltreHistoSvc.GetAsync(key.NomOperateur, key.NomFiltre);
+            if (freshHisto is null)
+            {
+                ModalError = "Filtre introuvable.";
+                return;
+            }
+            NomOperateur = freshHisto.NomOperateur;
+            NomFiltre = freshHisto.NomFiltre;
+            FiltreReel = freshHisto.FiltreReel ?? string.Empty;
+            _baselineHistorique = FiltreHistoriqueInput.FromEntity(freshHisto);
+            return;
+        }
+
         var fresh = await FiltreSvc.GetAsync(key.NomOperateur, key.NomFiltre);
         if (fresh is null)
         {
@@ -155,7 +186,7 @@
         NomOperateur = fresh.NomOperateur;
         NomFiltre = fresh.NomFiltre;
         FiltreReel = fresh.FiltreReel ?? string.Empty;
-        _baseline = FiltreOperatriceInput.FromEntity(fresh);
+        _baselineClient = FiltreOperatriceInput.FromEntity(fresh);
     }
 
     private async Task SaveAsync(bool force)
@@ -178,15 +209,34 @@
         {
             if (OriginalKey is { } key)
             {
-                if (_baseline is null) return;
-                var current = new FiltreOperatriceInput { NomOperateur = NomOperateur!, NomFiltre = trimmedName, FiltreReel = FiltreReel };
-                var result = await FiltreSvc.UpdateWithConflictCheckAsync(key.NomOperateur, key.NomFiltre, _baseline, current, force);
-                if (!result.Success)
+                if (Target == "historique")
                 {
-                    Conflicts = result.Conflicts;
-                    ConflictDialogOpen = true;
-                    return;
+                    if (_baselineHistorique is null) return;
+                    var currentHisto = new FiltreHistoriqueInput { NomOperateur = NomOperateur!, NomFiltre = trimmedName, FiltreReel = FiltreReel };
+                    var resultHisto = await FiltreHistoSvc.UpdateWithConflictCheckAsync(key.NomOperateur, key.NomFiltre, _baselineHistorique, currentHisto, force);
+                    if (!resultHisto.Success)
+                    {
+                        Conflicts = resultHisto.Conflicts;
+                        ConflictDialogOpen = true;
+                        return;
+                    }
                 }
+                else
+                {
+                    if (_baselineClient is null) return;
+                    var current = new FiltreOperatriceInput { NomOperateur = NomOperateur!, NomFiltre = trimmedName, FiltreReel = FiltreReel };
+                    var result = await FiltreSvc.UpdateWithConflictCheckAsync(key.NomOperateur, key.NomFiltre, _baselineClient, current, force);
+                    if (!result.Success)
+                    {
+                        Conflicts = result.Conflicts;
+                        ConflictDialogOpen = true;
+                        return;
+                    }
+                }
+            }
+            else if (Target == "historique")
+            {
+                await FiltreHistoSvc.CreateAsync(NomOperateur!, trimmedName, FiltreReel);
             }
             else
             {

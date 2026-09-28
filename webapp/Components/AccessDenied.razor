@@ -1,0 +1,25 @@
+@page "/access-denied"
+@attribute [AllowAnonymous]
+
+@* Two distinct paths land here, both needing the same fix:
+   1. A same-circuit Blazor navigation (e.g. a stale NavLink) fails
+      Routes.razor's AuthorizeRouteView — handled by the <NotAuthorized>
+      fragment there, which renders this component directly.
+   2. A fresh HTTP request (typing the URL, a hard link, this app's own
+      test tooling) to a restricted page never reaches Blazor's router at
+      all — ASP.NET Core's standard authorization middleware rejects it
+      first via the cookie handler's AccessDeniedPath (Program.cs),
+      redirecting here as a real page.
+   Before this existed, AccessDeniedPath was the same value as LoginPath
+   ("/login") — so case 2 (an already-logged-in Commercial hitting a
+   restricted page) looked exactly like "you're not logged in", not
+   "you don't have access". [AllowAnonymous] because case 2's redirect
+   happens before Blazor's own auth state is necessarily attached to
+   this fresh request; the message itself reveals nothing sensitive
+   either way. *@
+
+<div class="page ad-page" style="align-items: center; justify-content: center; display: flex; flex-direction: column; gap: 12px; height: 100%;">
+    <h2 class="ad-title">Accès refusé</h2>
+    <p class="dimmed" style="margin: 0;">Vous n'avez pas les droits nécessaires pour accéder à cette page.</p>
+    <a href="/rappels" class="btn btn-primary" style="text-decoration: none;">Retour à l'accueil</a>
+</div>

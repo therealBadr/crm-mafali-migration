@@ -1,0 +1,193 @@
+/* "Command Strip Workbench" — presentation only, scoped to this page via
+   Blazor CSS isolation. Same override set as Clients.razor.css, minus the
+   status-badge rules this page doesn't use. */
+
+.page {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 1px solid var(--color-workbench-border);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.toolbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.toolbar .title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.btn-primary {
+    background: var(--color-coral);
+    background-image: none;
+    color: #ffffff;
+    border: none;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-coral);
+    background-image: none;
+    filter: brightness(0.94);
+    box-shadow: none;
+}
+
+.btn-primary:active:not(:disabled) {
+    background: var(--color-coral);
+    filter: brightness(0.88);
+}
+
+.btn-outline,
+.btn-default {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-outline:hover:not(:disabled),
+.btn-default:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+    border-color: var(--color-workbench-border);
+}
+
+.btn-outline:active:not(:disabled) {
+    background: var(--color-ink-soft);
+    filter: brightness(0.97);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.search-bar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.search-input {
+    font-family: var(--font-sans-workbench);
+    border: 1px solid var(--color-workbench-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.search-input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+    border-color: var(--color-coral);
+}
+
+.result-count {
+    color: var(--color-muted-foreground);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.header-row {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.header-row .cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    border-right: 1px solid var(--color-workbench-border);
+}
+
+.row {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-workbench-border);
+    transition: background 140ms ease;
+}
+
+.row:nth-child(even) {
+    background: var(--color-surface);
+}
+
+.row:hover {
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-ink) 4%);
+}
+
+.row.selected {
+    background: var(--color-ink-soft);
+    box-shadow: inset 3px 0 0 var(--color-ink);
+}
+
+.row.selected:hover {
+    background: var(--color-ink-soft);
+}
+
+.cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 13px;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.count {
+    color: var(--color-muted-foreground);
+}
+
+.modal-backdrop {
+    background: var(--color-ink-scrim);
+}
+
+.modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: -8px 8px 32px -20px rgba(23, 32, 51, 0.55);
+    font-family: var(--font-sans-workbench);
+}
+
+.modal h3 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+}
+
+.confirm-text {
+    color: var(--color-ink);
+}
+
+.modal .text-input {
+    font-family: var(--font-sans-workbench);
+    border: 1px solid var(--color-workbench-border);
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.modal .text-input:focus {
+    outline: none;
+    border-color: var(--color-coral);
+    box-shadow: 0 0 0 3px var(--color-coral-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .row,
+    .btn,
+    .text-input {
+        transition: none !important;
+    }
+}

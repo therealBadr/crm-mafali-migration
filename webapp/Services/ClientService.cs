@@ -33,10 +33,17 @@ public class ClientInput
     public string? ResponsableAchat { get; set; }
     public string? Representant { get; set; }
     public string? AssistanteCommercial { get; set; }
+    public string? EtatClient { get; set; }
 
     // Same read-modify-write starting point ParcoursClientInput.FromEntity
     // gives Fen_Parcours_Client/Fen_Recherche_Client — used by ClientForm's
-    // own edit mode (baseline + conflict check) below.
+    // own edit mode (baseline + conflict check) below. EtatClient is passed
+    // through exactly as stored (including legacy junk like "0"/"-1"/blank)
+    // — ClientForm.razor's own display coerces it to Client/Prospect for
+    // the dropdown, but this getter never rewrites it; only an explicit
+    // edit of that field changes what actually gets saved back
+    // (2026-09-04 "Etat Client" change — cosmetic-only, no bulk rewrite of
+    // existing data, confirmed with Badr).
     public static ClientInput FromEntity(FranceOptique c) => new()
     {
         RaisonSociale = c.RaisonSociale ?? string.Empty,
@@ -56,6 +63,7 @@ public class ClientInput
         ResponsableAchat = c.ResponsableAchat,
         Representant = c.Representant,
         AssistanteCommercial = c.AssistanteCommercial,
+        EtatClient = c.EtatClient,
     };
 }
 
@@ -195,19 +203,6 @@ public class ClientService
         return await db.FranceOptiques.CountAsync();
     }
 
-    // Backs Fen_Recherche_Client's "Ouvrir le Phoning with every field
-    // blank" case — a cheap, single-row lookup (ORDER BY the primary key,
-    // not the full ListAsync()) rather than fetching all 487 rows just to
-    // read the first one.
-    public async Task<long?> GetFirstCleOplAsync()
-    {
-        await using var db = await _dbFactory.CreateDbContextAsync();
-        return await db.FranceOptiques.AsNoTracking()
-            .OrderBy(c => c.CleOpl)
-            .Select(c => (long?)c.CleOpl)
-            .FirstOrDefaultAsync();
-    }
-
     // cle_opl is ValueGeneratedNever() — unlike an identity column, EF Core
     // won't assign it for us. Same as the old backend's raw
     // `SELECT nextval(...)`, just via EF Core's typed raw-SQL scalar query
@@ -272,6 +267,7 @@ public class ClientService
         [nameof(ClientInput.ResponsableAchat)] = "Responsable Achat",
         [nameof(ClientInput.Representant)] = "Représentant",
         [nameof(ClientInput.AssistanteCommercial)] = "Assistante Commerciale",
+        [nameof(ClientInput.EtatClient)] = "Etat Client",
     };
 
     // ClientForm's edit-mode save path — same three-way merge as
@@ -539,6 +535,7 @@ public class ClientService
         entity.ResponsableAchat = input.ResponsableAchat;
         entity.Representant = input.Representant;
         entity.AssistanteCommercial = input.AssistanteCommercial;
+        entity.EtatClient = input.EtatClient;
     }
 
     // The constraint-name-aware message is specific enough to this entity

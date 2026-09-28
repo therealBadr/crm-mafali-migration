@@ -1,0 +1,83 @@
+/* "Command Strip Workbench" — presentation only, scoped to this page. */
+
+.login-page {
+    background: var(--color-ink);
+    font-family: var(--font-sans-workbench);
+}
+
+.login-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: -8px 8px 40px -20px rgba(23, 32, 51, 0.6);
+}
+
+.login-brand {
+    margin-bottom: var(--space-5);
+}
+
+.login-card h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--color-ink);
+    letter-spacing: normal;
+}
+
+.login-suffix {
+    font-family: var(--font-sans-workbench);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--color-coral);
+}
+
+.login-sub {
+    color: var(--color-muted-foreground);
+}
+
+.login-card label {
+    color: var(--color-muted-foreground);
+    font-family: var(--font-sans-workbench);
+}
+
+.login-card .text-input {
+    font-family: var(--font-sans-workbench);
+    border: 1px solid var(--color-workbench-border);
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.login-card .text-input:focus {
+    outline: none;
+    border-color: var(--color-coral);
+    box-shadow: 0 0 0 3px var(--color-coral-soft);
+}
+
+.login-card .btn-primary {
+    background: var(--color-coral);
+    background-image: none;
+    color: #ffffff;
+    font-family: var(--font-sans-workbench);
+    border: none;
+    box-shadow: none;
+}
+
+.login-card .btn-primary:hover:not(:disabled) {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.login-card .alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+    font-family: var(--font-sans-workbench);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .login-card .text-input,
+    .login-card .btn-primary {
+        transition: none !important;
+    }
+}

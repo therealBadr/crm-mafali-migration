@@ -1,0 +1,445 @@
+@page "/definir-filtre-historique"
+@attribute [Authorize(Roles = "admin,assistant")]
+@inject HistoriqueFilterService FilterSvc
+@inject AssistanteService AssistanteSvc
+@inject FranchiseService FranchiseSvc
+@inject CurrentUserService CurrentUser
+
+@* Historique's half of Outils > Définir un Filtre — same builder shape as
+   DefinirFiltrePage.razor (Client's half), just against HistoriqueFilterService's
+   15 Historique columns instead of Client's 35. See that page for the
+   detailed reasoning behind the grid layout, the dynamic value-column
+   sizing, and the add-condition/add-value affordances — all identical here,
+   not repeated. *@
+
+<PageTitle>Définir un Filtre Historique</PageTitle>
+
+<div class="page page-flush">
+<div class="toolbar">
+    <span class="title">Rechercher et Définir un Filtre (Historique)</span>
+    @if (Plan == 2)
+    {
+        <div class="actions">
+            @if (CanCreate)
+            {
+                <button class="btn btn-primary" @onclick="OpenSaveModal">Enregistrer le Filtre en Cours</button>
+            }
+            <button class="btn btn-outline" @onclick="() => Plan = 1">Précédent</button>
+        </div>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Plan == 1)
+{
+    <p class="dimmed" style="padding: 8px 16px;">
+        Les dates sont au format « AAAA-MM-JJ ». Les heures sont au format « HH:MM ».
+    </p>
+    <div class="table-wrap" style="overflow-x: auto;">
+        <table class="filter-table" style="width: 100%; min-width: @(TableWidth)px;">
+            <colgroup>
+                <col style="width: 220px;" />
+                <col style="width: 200px;" />
+                <col style="width: 200px;" />
+                @for (var h = 1; h <= ExtraValueColumns; h++)
+                {
+                    <col />
+                }
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Rubrique</th>
+                    <th>Condition</th>
+                    <th>Valeur</th>
+                    @for (var h = 1; h <= ExtraValueColumns; h++)
+                    {
+                        <th>Valeur @(h + 1)</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var f in HistoriqueFilterService.Fields)
+                {
+                    var groups = Rows[f.Field];
+                    @for (var g = 0; g < groups.Count; g++)
+                    {
+                        var row = groups[g];
+                        var groupIndex = g;
+                        var isFirstGroup = groupIndex == 0;
+                        var isLiaison = row.Operator is not null && ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
+                        <tr>
+                            <td>
+                                @if (isFirstGroup)
+                                {
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                                        <span>@f.Label</span>
+                                        <button class="value-btn btn-add-value" title="Ajouter une condition (opérateur différent) pour ce champ"
+                                                @onclick="() => AddGroup(f.Field)">+</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <select class="text-input" style="flex: 0 0 56px; padding: 4px;" title="Comment cette condition se combine avec la précédente pour ce champ"
+                                                value="@row.GroupLiaison" @onchange="e => row.GroupLiaison = e.Value?.ToString() ?? row.GroupLiaison">
+                                            <option value="ou">OU</option>
+                                            <option value="et">ET</option>
+                                        </select>
+                                        <button class="value-btn btn-remove-value" title="Retirer cette condition"
+                                                @onclick="() => RemoveGroup(f.Field, groupIndex)">×</button>
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <select class="text-input" value="@(row.Operator?.ToString() ?? "")" @onchange="e => OnOperatorChange(f.Field, groupIndex, e)">
+                                    <option value="">&lt; Aucune &gt;</option>
+                                    @foreach (var op in ClientFilterService.OperatorsByType[f.Type])
+                                    {
+                                        <option value="@op">@OperatorLabels[op]</option>
+                                    }
+                                </select>
+                            </td>
+                            <td>
+                                @if (row.Operator is not null)
+                                {
+                                    @if (LookupOptions.TryGetValue(f.Field, out var lookup0))
+                                    {
+                                        <select class="text-input" value="@row.Values[0]" @onchange="e => row.Values[0] = e.Value?.ToString() ?? string.Empty">
+                                            <option value="">—</option>
+                                            @foreach (var opt in lookup0)
+                                            {
+                                                <option value="@opt">@opt</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <input class="text-input" type="@InputType(f.Type)" value="@row.Values[0]"
+                                               @oninput="e => row.Values[0] = e.Value?.ToString() ?? string.Empty" />
+                                    }
+                                }
+                            </td>
+                            @for (var col = 1; col <= ExtraValueColumns; col++)
+                            {
+                                var idx = col;
+                                <td class="value-cell">
+                                    @if (row.Operator == Operator.Between)
+                                    {
+                                        @if (idx == 1)
+                                        {
+                                            @if (LookupOptions.TryGetValue(f.Field, out var lookup1))
+                                            {
+                                                <select class="text-input" value="@row.Values[1]" @onchange="e => row.Values[1] = e.Value?.ToString() ?? string.Empty">
+                                                    <option value="">—</option>
+                                                    @foreach (var opt in lookup1)
+                                                    {
+                                                        <option value="@opt">@opt</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <input class="text-input" type="@InputType(f.Type)" value="@row.Values[1]"
+                                                       @oninput="e => row.Values[1] = e.Value?.ToString() ?? string.Empty" />
+                                            }
+                                        }
+                                    }
+                                    else if (isLiaison && idx < row.Values.Count)
+                                    {
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <select class="text-input" style="flex: 0 0 56px; padding: 4px;" title="OU (au moins une des valeurs) ou ET (toutes les valeurs à la fois — n'a de sens qu'avec Différent de / Ne commence pas par / Ne contient pas)"
+                                                    value="@row.Liaison" @onchange="e => row.Liaison = e.Value?.ToString() ?? row.Liaison">
+                                                <option value="ou">OU</option>
+                                                <option value="et">ET</option>
+                                            </select>
+                                            @if (LookupOptions.TryGetValue(f.Field, out var lookupN))
+                                            {
+                                                <select class="text-input" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[idx]" @onchange="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty">
+                                                    <option value="">—</option>
+                                                    @foreach (var opt in lookupN)
+                                                    {
+                                                        <option value="@opt">@opt</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <input class="text-input" style="flex: 1 1 auto; min-width: 0;" type="@InputType(f.Type)" value="@row.Values[idx]"
+                                                       @oninput="e => row.Values[idx] = e.Value?.ToString() ?? string.Empty" />
+                                            }
+                                            <button class="value-btn btn-remove-value" title="Retirer cette valeur"
+                                                    @onclick="() => RemoveValue(f.Field, groupIndex, idx)">×</button>
+                                        </div>
+                                    }
+                                    else if (isLiaison && idx == row.Values.Count)
+                                    {
+                                        <button class="value-btn btn-add-value" title="Ajouter une valeur"
+                                                @onclick="() => AddValue(f.Field, groupIndex)">+</button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="modal-actions" style="padding: 10px 16px; border-top: 1px solid var(--color-workbench-border); margin: 0;">
+        <button class="btn btn-default" @onclick="HandleReset">Réinitialiser</button>
+        <button class="btn btn-primary" disabled="@Searching" @onclick="HandleSearch">Rechercher</button>
+    </div>
+}
+else
+{
+    <p class="count" style="text-align: right;">@Count enregistrement@(Count != 1 ? "s" : "")</p>
+    <div class="table-wrap" style="overflow-x: auto;">
+        <div style="@GridLayout.WrapperStyle(ResultTotalWidth)">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in ResultColumns)
+                {
+                    <div class="cell @ResultSort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])" @onclick='() => ResultSort.Toggle(col.Key)'>
+                        @col.Label @ResultSort.ArrowFor(col.Key)
+                        <ColumnFilterIcon Column="@col.Key" Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
+                    </div>
+                }
+            </div>
+            <Virtualize Items="SortedResults" Context="h" ItemSize="34">
+                <div class="row" style="cursor: default;">
+                    @foreach (var col in ResultColumns)
+                    {
+                        <div class="cell" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])">
+                            @GetResultCellText(h, col.Key)
+                        </div>
+                    }
+                </div>
+            </Virtualize>
+        </div>
+    </div>
+}
+</div>
+
+<FiltreDetailModal Opened="SaveModalOpen" OnClose="() => SaveModalOpen = false" Assistantes="Assistantes"
+                    Mode="search-save" Target="historique" InitialFiltreReel="@SaveModalFiltreReel" OnSaved="() => SaveModalOpen = false" />
+
+@code {
+    // Same RowState shape as DefinirFiltrePage.razor — see that page's own
+    // comments for the field-by-field reasoning, identical here.
+    private class RowState
+    {
+        public Operator? Operator;
+        public List<string> Values = new() { string.Empty };
+        public string Liaison = "ou";
+        public string GroupLiaison = "ou";
+    }
+
+    private static readonly Dictionary<Operator, string> OperatorLabels = new()
+    {
+        [Operator.Eq] = "Egal à",
+        [Operator.Ne] = "Différent de",
+        [Operator.Gt] = "Supérieur à",
+        [Operator.Gte] = "Supérieur ou égal à",
+        [Operator.Lt] = "Inférieur à",
+        [Operator.Lte] = "Inférieur ou égal à",
+        [Operator.Between] = "Entre",
+        [Operator.StartsWith] = "Commence par",
+        [Operator.NotStartsWith] = "Ne commence pas par",
+        [Operator.Contains] = "Contient",
+        [Operator.NotContains] = "Ne contient pas",
+    };
+
+    private record ResultColumnDef(string Key, string Label, int Width);
+
+    private readonly List<ResultColumnDef> ResultColumns = new()
+    {
+        new("num_client", "N° Client", 100),
+        new("date_saisie", "Date Saisie", 100),
+        new("heure_saisie", "Heure Saisie", 90),
+        new("assistante_commercial", "Assistante Commerciale", 180),
+        new("date_rappel", "Date Rappel", 100),
+        new("heure_rappel", "Heure Rappel", 90),
+        new("operation", "Opération", 140),
+        new("status_vente", "Status Vente", 140),
+        new("note", "Note", 220),
+        new("franchise", "Franchise", 140),
+        new("raison_sociale", "Raison Sociale", 200),
+        new("cp", "Code Postal", 90),
+        new("ville", "Ville", 140),
+        new("statuts_clients", "Statuts Clients", 140),
+        new("magasin_principal", "Magasin Principal", 160),
+    };
+
+    private int ResultTotalWidth => ResultColumns.Sum(c => c.Width);
+
+    private readonly Dictionary<string, List<RowState>> Rows =
+        HistoriqueFilterService.Fields.ToDictionary(f => f.Field, f => new List<RowState> { new() });
+
+    private int ExtraValueColumns => Math.Max(1, Rows.Values.SelectMany(groups => groups).Max(r => r.Values.Count));
+
+    private const int ExtraColWidth = 280;
+
+    private int TableWidth => 220 + 200 + 200 + ExtraValueColumns * ExtraColWidth;
+
+    private int Plan = 1;
+    private List<Historique> Results = new();
+    private int Count;
+    private bool Searching;
+    private string? Error;
+    private readonly SortState ResultSort = new();
+    private readonly GridFilterState ResultFilter = new();
+
+    private List<Historique> SortedResults => GridSort.Apply(GridFilter.Apply(Results, ResultFilter, GetResultCellText), ResultSort, GetResultCellText);
+
+    private List<string> Assistantes = new();
+    private bool SaveModalOpen;
+    private string SaveModalFiltreReel = string.Empty;
+    private bool CanCreate;
+
+    // Franchise/Assistante Commerciale are Fichier-table-backed everywhere
+    // else in the app (2026-08-17 policy) — same two fields DefinirFiltrePage
+    // treats as dropdowns; Historique has no famille/pays columns of its
+    // own, so those two are the whole set here.
+    private readonly Dictionary<string, List<string>> LookupOptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        CanCreate = await CurrentUser.CanCreateFiltersAsync();
+
+        try
+        {
+            Assistantes = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+            LookupOptions["franchise"] = await FranchiseSvc.ListAsync();
+            LookupOptions["assistante_commercial"] = Assistantes;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    private static string InputType(FieldType type) => type switch
+    {
+        FieldType.Date => "date",
+        FieldType.Time => "time",
+        FieldType.Number => "number",
+        _ => "text",
+    };
+
+    private void OnOperatorChange(string field, int groupIndex, ChangeEventArgs e)
+    {
+        var row = Rows[field][groupIndex];
+        var val = e.Value?.ToString();
+        row.Operator = string.IsNullOrEmpty(val) ? null : Enum.Parse<Operator>(val);
+        row.Values = row.Operator == Operator.Between ? new() { "", "" } : new() { "" };
+        row.Liaison = row.Operator is not null && ClientFilterService.SecondValueLiaison.TryGetValue(row.Operator.Value, out var defaultLiaison)
+            ? defaultLiaison
+            : "ou";
+    }
+
+    private void AddValue(string field, int groupIndex) => Rows[field][groupIndex].Values.Add(string.Empty);
+
+    private void RemoveValue(string field, int groupIndex, int index) => Rows[field][groupIndex].Values.RemoveAt(index);
+
+    private void AddGroup(string field) => Rows[field].Add(new RowState());
+
+    private void RemoveGroup(string field, int groupIndex)
+    {
+        var groups = Rows[field];
+        if (groups.Count <= 1) return;
+        groups.RemoveAt(groupIndex);
+    }
+
+    private List<Condition> BuildConditions()
+    {
+        var result = new List<Condition>();
+        foreach (var f in HistoriqueFilterService.Fields)
+        {
+            foreach (var row in Rows[f.Field])
+            {
+                if (row.Operator is null) continue;
+                if (string.IsNullOrWhiteSpace(row.Values[0])) continue;
+
+                if (row.Operator == Operator.Between)
+                {
+                    if (row.Values.Count < 2 || string.IsNullOrWhiteSpace(row.Values[1])) continue;
+                    result.Add(new Condition { Field = f.Field, Operator = row.Operator.Value, Values = new() { row.Values[0], row.Values[1] }, GroupLiaison = row.GroupLiaison });
+                    continue;
+                }
+
+                var values = new List<string> { row.Values[0] };
+                var isLiaisonOp = ClientFilterService.SecondValueLiaison.ContainsKey(row.Operator.Value);
+                if (isLiaisonOp)
+                {
+                    values.AddRange(row.Values.Skip(1).Where(v => !string.IsNullOrWhiteSpace(v)));
+                }
+                result.Add(new Condition
+                {
+                    Field = f.Field,
+                    Operator = row.Operator.Value,
+                    Values = values,
+                    Liaison = isLiaisonOp ? row.Liaison : null,
+                    GroupLiaison = row.GroupLiaison,
+                });
+            }
+        }
+        return result;
+    }
+
+    private void HandleReset()
+    {
+        foreach (var f in HistoriqueFilterService.Fields)
+        {
+            Rows[f.Field] = new List<RowState> { new() };
+        }
+    }
+
+    private async Task HandleSearch()
+    {
+        Searching = true;
+        Error = null;
+        try
+        {
+            var (rows, count) = await FilterSvc.SearchAsync(BuildConditions());
+            Results = rows;
+            Count = count;
+            Plan = 2;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Searching = false;
+        }
+    }
+
+    private void OpenSaveModal()
+    {
+        SaveModalFiltreReel = HistoriqueFilterService.BuildLegacyFiltreReel(BuildConditions());
+        SaveModalOpen = true;
+    }
+
+    private static string GetResultCellText(Historique h, string key) => key switch
+    {
+        "num_client" => h.NumClient.ToString(),
+        "date_saisie" => h.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "heure_saisie" => h.HeureSaisie?.ToString("HH:mm") ?? "",
+        "assistante_commercial" => h.AssistanteCommercial ?? "",
+        "date_rappel" => h.DateRappel?.ToString("dd/MM/yyyy") ?? "",
+        "heure_rappel" => h.HeureRappel?.ToString("HH:mm") ?? "",
+        "operation" => h.Operation ?? "",
+        "status_vente" => h.StatusVente ?? "",
+        "note" => h.Note ?? "",
+        "franchise" => h.Franchise ?? "",
+        "raison_sociale" => h.RaisonSociale ?? "",
+        "cp" => h.Cp ?? "",
+        "ville" => h.Ville ?? "",
+        "statuts_clients" => h.StatutsClients ?? "",
+        "magasin_principal" => h.MagasinPrincipal ?? "",
+        _ => "",
+    };
+}

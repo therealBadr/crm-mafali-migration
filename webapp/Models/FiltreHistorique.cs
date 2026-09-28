@@ -5,6 +5,8 @@ namespace MafaliCrm.Web.Models;
 
 public partial class FiltreHistorique
 {
+    public string NomOperateur { get; set; } = null!;
+
     public string NomFiltre { get; set; } = null!;
 
     public string? FiltreReel { get; set; }

@@ -5,43 +5,63 @@
 
 <div class="app-shell">
     <header class="topbar">
-        <span class="brand">
-            <span class="brand-mark">M</span>
-            Mafali CRM
-        </span>
+        @* Now a real link, not just a label — "/" became an actual
+           dashboard page (2026-09-19) instead of a pure redirect, so
+           there's finally somewhere meaningful for the brand to point. *@
+        <a href="/" class="brand">
+            <span class="brand-word">Mafali</span>
+            <span class="brand-suffix">CRM</span>
+        </a>
         <nav class="nav-links">
-            <div class="nav-dropdown">
-                <button type="button" class="nav-link nav-dropdown-toggle" @onclick="ToggleFichiers">
-                    Fichiers
-                    <span class="nav-caret">@(FichiersOpen ? "▴" : "▾")</span>
-                </button>
-                @if (FichiersOpen)
-                {
-                    <div class="nav-dropdown-panel">
-                        @foreach (var item in FichierItems)
+            @* Every item currently behind this dropdown (Fichier des Clients/
+               Familles/Franchises/Pays/Assistantes/Filtres/Filtres Historique/
+               Historiques) is admin/assistant-only (2026-09-03 permissions
+               pass) — none of them are reachable by Commercial, so the whole
+               dropdown button is hidden for that role rather than opening to
+               an empty panel. *@
+            <AuthorizeView Roles="admin,assistant">
+                <Authorized>
+                    <div class="nav-dropdown">
+                        <button type="button" class="nav-link nav-dropdown-toggle" @onclick="ToggleFichiers">
+                            Fichiers
+                            <span class="nav-caret">@(FichiersOpen ? "▴" : "▾")</span>
+                        </button>
+                        @if (FichiersOpen)
                         {
-                            <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
-                                @item.Label
-                            </NavLink>
+                            <div class="nav-dropdown-panel">
+                                @foreach (var item in FichierItems)
+                                {
+                                    <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
+                                        @item.Label
+                                    </NavLink>
+                                }
+                                <AuthorizeView Roles="admin">
+                                    <Authorized Context="adminContext">
+                                        @* Utilisateurs used to be here — moved into Mon Compte
+                                           (2026-08-19, Badr: "admins never leave this page"),
+                                           not duplicated, so no separate nav entry for it
+                                           anymore. Mon Compte itself is already reachable
+                                           from the account menu on the right. *@
+                                        <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
+                                            Historique des Connexions
+                                        </NavLink>
+                                    </Authorized>
+                                </AuthorizeView>
+                            </div>
                         }
-                        <AuthorizeView Roles="admin">
-                            <Authorized>
-                                @* Utilisateurs used to be here — moved into Mon Compte
-                                   (2026-08-19, Badr: "admins never leave this page"),
-                                   not duplicated, so no separate nav entry for it
-                                   anymore. Mon Compte itself is already reachable
-                                   from the account menu on the right. *@
-                                <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
-                                    Historique des Connexions
-                                </NavLink>
-                            </Authorized>
-                        </AuthorizeView>
                     </div>
-                }
-            </div>
-            <NavLink href="/definir-filtre" class="nav-link" ActiveClass="nav-link-active">
-                Définir un Filtre
-            </NavLink>
+                </Authorized>
+            </AuthorizeView>
+            <AuthorizeView Roles="admin,assistant">
+                <Authorized>
+                    <NavLink href="/definir-filtre" class="nav-link" ActiveClass="nav-link-active">
+                        Définir un Filtre
+                    </NavLink>
+                    <NavLink href="/definir-filtre-historique" class="nav-link" ActiveClass="nav-link-active">
+                        Définir un Filtre Historique
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
             <NavLink href="/filtres-predefinis" class="nav-link" ActiveClass="nav-link-active">
                 Filtres Prédéfinis
             </NavLink>
@@ -54,6 +74,19 @@
             <NavLink href="/bon-commande" class="nav-link" ActiveClass="nav-link-active">
                 Bon de Commande
             </NavLink>
+            @* Was a "Nouveau" button on Parcours Client itself — moved here
+               (2026-09-22, Badr) since it just navigates to /clients/new
+               regardless of which client happens to be loaded on that page.
+               Same role gate as /clients/new itself (ClientForm.razor:
+               admin,assistant) so this link never appears for a role that
+               would just get denied on the page it points to. *@
+            <AuthorizeView Roles="admin,assistant">
+                <Authorized>
+                    <NavLink href="/clients/new" class="nav-link" ActiveClass="nav-link-active">
+                        Ajouter un Client
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
         </nav>
         <div class="nav-user">
             <AuthorizeView>
@@ -108,6 +141,7 @@
         ("/pays", "Liste Pays"),
         ("/assistantes", "Fichier des Assistantes"),
         ("/fichier-filtres", "Fichier des Filtres"),
+        ("/fichier-filtres-historique", "Fichier des Filtres Historique"),
         ("/fichier-historique", "Fichier des Historiques"),
     };
 

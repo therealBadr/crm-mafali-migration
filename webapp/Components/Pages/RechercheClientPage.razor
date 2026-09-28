@@ -7,6 +7,8 @@
 @inject FranchiseService FranchiseSvc
 @inject PaysService PaysSvc
 @inject AssistanteService AssistanteSvc
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* Mirrors Fen_Recherche_Client — multi-criteria search across every client
    field simultaneously (fill in one or more, get everyone who matches all
@@ -45,9 +47,15 @@
    set already verified there, not this window's own separate (and
    real-data-mismatched) hardcoded list. *@
 
-<PageTitle>Recherche Client Multi-Critères</PageTitle>
+@* Dynamic tab title — same reasoning as ParcoursClientPage/FiltresPrédéfinis.
+   Before a search runs, shows whichever criterion the salesperson typed
+   first (in a fixed priority order — this form has no single "subject"
+   field the way a client record does). After a search, shows the result
+   count instead, since that's the more useful distinguisher once you're
+   comparing several searches across tabs. *@
+<PageTitle>@TabTitle</PageTitle>
 
-<div class="rc-page">
+<div class="rc-page page-flush">
     <div class="rc-topbar">
         <span class="rc-title">Recherche Client Multi-Critères</span>
     </div>
@@ -57,7 +65,7 @@
         <div class="alert">@Error</div>
     }
 
-    <div class="rc-body">
+    <div class="rc-body" @onkeydown="HandleCriteriaKeyDown">
         <div class="rc-col">
             <div class="rc-field">
                 <label>Famille :</label>
@@ -78,61 +86,67 @@
                 <label>Complement :</label>
                 <AutocompleteInput @bind-Value="Input.Complement" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("complement", p)' />
             </div>
-            <div class="rc-field">
-                <label>Franchise 1 :</label>
-                <select class="text-input" value="@(Input.Franchise ?? "")"
-                        @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Franchise 1 :</label>
+                    <select class="text-input" value="@(Input.Franchise ?? "")"
+                            @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Franchise 2 :</label>
+                    <select class="text-input" value="@(Input.Franchise2 ?? "")"
+                            @onchange="e => Input.Franchise2 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
             </div>
-            <div class="rc-field">
-                <label>Franchise 2 :</label>
-                <select class="text-input" value="@(Input.Franchise2 ?? "")"
-                        @onchange="e => Input.Franchise2 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
-            </div>
-            <div class="rc-field">
-                <label>Franchise 3 :</label>
-                <select class="text-input" value="@(Input.Franchise3 ?? "")"
-                        @onchange="e => Input.Franchise3 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
-            </div>
-            <div class="rc-field">
-                <label>Franchise 4 :</label>
-                <select class="text-input" value="@(Input.Franchise4 ?? "")"
-                        @onchange="e => Input.Franchise4 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Franchise 3 :</label>
+                    <select class="text-input" value="@(Input.Franchise3 ?? "")"
+                            @onchange="e => Input.Franchise3 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Franchise 4 :</label>
+                    <select class="text-input" value="@(Input.Franchise4 ?? "")"
+                            @onchange="e => Input.Franchise4 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
             </div>
             <div class="rc-field">
                 <label>Rue :</label>
                 <AutocompleteInput @bind-Value="Input.Rue" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("rue", p)' />
             </div>
-            <div class="rc-field">
-                <label>Localisation 1 :</label>
-                <AutocompleteInput @bind-Value="Input.Localisation1" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("localisation_1", p)' />
-            </div>
-            <div class="rc-field">
-                <label>Localisation 2 :</label>
-                <AutocompleteInput @bind-Value="Input.Localisation2" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("localisation_2", p)' />
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Localisation 1 :</label>
+                    <AutocompleteInput @bind-Value="Input.Localisation1" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("localisation_1", p)' />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Localisation 2 :</label>
+                    <AutocompleteInput @bind-Value="Input.Localisation2" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("localisation_2", p)' />
+                </div>
             </div>
             <div class="rc-field-row">
                 <div class="rc-field" style="flex: 0 0 100px;">
@@ -144,31 +158,29 @@
                     <AutocompleteInput @bind-Value="Input.Ville" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("ville", p)' />
                 </div>
             </div>
-            <div class="rc-field">
-                <label>Pays :</label>
-                <select class="text-input" value="@(Input.Pays ?? "")"
-                        @onchange="e => Input.Pays = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var p in PaysOptions)
-                    {
-                        <option value="@p">@p</option>
-                    }
-                </select>
-            </div>
-            <div class="rc-field">
-                <label>Magasin :</label>
-                <AutocompleteInput @bind-Value="Input.MagasinPrincipal" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("magasin_principal", p)' />
-            </div>
-            <div class="rc-field">
-                <label>Note :</label>
-                <textarea class="text-input" rows="4" @bind="Input.Note"></textarea>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Pays :</label>
+                    <select class="text-input" value="@(Input.Pays ?? "")"
+                            @onchange="e => Input.Pays = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var p in PaysOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="rc-field" style="flex: 2;">
+                    <label>Magasin :</label>
+                    <AutocompleteInput @bind-Value="Input.MagasinPrincipal" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("magasin_principal", p)' />
+                </div>
             </div>
         </div>
 
         <div class="rc-col">
             <div class="rc-field-row">
                 <div class="rc-field" style="flex: 1;">
-                    <label>Telephone de référence :</label>
+                    <label>Telephone :</label>
                     <AutocompleteInput @bind-Value="Input.Telephone" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("telephone", p)' />
                 </div>
                 <div class="rc-field" style="flex: 1;">
@@ -190,43 +202,47 @@
                 <label>Adresse Email :</label>
                 <AutocompleteInput @bind-Value="Input.Email" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("email", p)' />
             </div>
-            <div class="rc-field">
-                <label>Assist Commerciale :</label>
-                <select class="text-input" value="@(Input.AssistanteCommercial ?? "")"
-                        @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var a in AssistanteOptions)
-                    {
-                        <option value="@a">@a</option>
-                    }
-                </select>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Assist Commerciale :</label>
+                    <select class="text-input" value="@(Input.AssistanteCommercial ?? "")"
+                            @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var a in AssistanteOptions)
+                        {
+                            <option value="@a">@a</option>
+                        }
+                    </select>
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Responsable Achat :</label>
+                    <AutocompleteInput @bind-Value="Input.ResponsableAchat" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("responsable_achat", p)' />
+                </div>
             </div>
-            <div class="rc-field">
-                <label>Responsable Achat :</label>
-                <AutocompleteInput @bind-Value="Input.ResponsableAchat" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("responsable_achat", p)' />
-            </div>
-            <div class="rc-field">
-                <label>Opération en Cours :</label>
-                <select class="text-input" value="@(Input.OpEnCours ?? "")" @onchange="OnOperationChange">
-                    <option value="">Toutes</option>
-                    <option value="A Rappeler Mois">A Rappeler Mois</option>
-                    <option value="A Rappeler Date">A Rappeler Date</option>
-                    <option value="A Rappeler Date Heure">A Rappeler Date Heure</option>
-                    <option value="Pas Intéressé">Pas Intéressé</option>
-                    <option value="Vente en Cours">Vente en Cours</option>
-                </select>
-            </div>
-            <div class="rc-field">
-                <label>Status de la Vente :</label>
-                <select class="text-input" value="@(Input.StatusVente ?? "")"
-                        @onchange="e => Input.StatusVente = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">Tous</option>
-                    <option value="Devis en cours">Devis en cours</option>
-                    <option value="Vente (BAT Signé)">Vente (BAT Signé)</option>
-                    <option value="Vente (BAT Original)">Vente (BAT Original)</option>
-                    <option value="Vente (Bon de Commande)">Vente (Bon de Commande)</option>
-                    <option value="Vente Annulée">Vente Annulée</option>
-                </select>
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Opération en Cours :</label>
+                    <select class="text-input" value="@(Input.OpEnCours ?? "")" @onchange="OnOperationChange">
+                        <option value="">Toutes</option>
+                        <option value="A Rappeler Mois">A Rappeler Mois</option>
+                        <option value="A Rappeler Date">A Rappeler Date</option>
+                        <option value="A Rappeler Date Heure">A Rappeler Date Heure</option>
+                        <option value="Pas Intéressé">Pas Intéressé</option>
+                        <option value="Vente en Cours">Vente en Cours</option>
+                    </select>
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Status de la Vente :</label>
+                    <select class="text-input" value="@(Input.StatusVente ?? "")"
+                            @onchange="e => Input.StatusVente = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">Tous</option>
+                        <option value="Devis en cours">Devis en cours</option>
+                        <option value="Vente (BAT Signé)">Vente (BAT Signé)</option>
+                        <option value="Vente (BAT Original)">Vente (BAT Original)</option>
+                        <option value="Vente (Bon de Commande)">Vente (Bon de Commande)</option>
+                        <option value="Vente Annulée">Vente Annulée</option>
+                    </select>
+                </div>
             </div>
             <div class="rc-field-row">
                 <div class="rc-field" style="flex: 1;">
@@ -252,25 +268,34 @@
                            @onchange="e => Input.HeureRappel = ParseTime(e.Value?.ToString())" />
                 </div>
             </div>
-            <div class="rc-field">
-                <label>Numéro Client :</label>
-                <input class="text-input" type="number" value="@Input.CleOpl"
-                       @oninput="e => Input.CleOpl = long.TryParse(e.Value?.ToString(), out var v) ? v : null" />
+            <div class="rc-field-row">
+                <div class="rc-field" style="flex: 1;">
+                    <label>Numéro Client :</label>
+                    <input class="text-input" type="number" value="@Input.CleOpl"
+                           @oninput="e => Input.CleOpl = long.TryParse(e.Value?.ToString(), out var v) ? v : null" />
+                </div>
+                <div class="rc-field" style="flex: 1;">
+                    <label>Statuts clients :</label>
+                    <select class="text-input" value="@(Input.StatutsClients ?? "")"
+                            @onchange="e => Input.StatutsClients = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        <option value="Payés">Payés</option>
+                        <option value="Impayés">Impayés</option>
+                        <option value="Bloqués">Bloqués</option>
+                    </select>
+                </div>
             </div>
             <div class="rc-field">
-                <label>Statuts clients :</label>
-                <select class="text-input" value="@(Input.StatutsClients ?? "")"
-                        @onchange="e => Input.StatutsClients = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    <option value="Payés">Payés</option>
-                    <option value="Impayés">Impayés</option>
-                    <option value="Bloqués">Bloqués</option>
-                </select>
+                <label>Note :</label>
+                <textarea class="text-input" rows="2" @bind="Input.Note"></textarea>
             </div>
         </div>
     </div>
 
-    <div class="rc-actions">
+    @* grid-group-start: this action row (not the multi-field .rc-body form
+       above it) is where the results grid's resizable "top" starts — see
+       mafaliRowResize in app.js. *@
+    <div class="rc-actions grid-group-start">
         <button class="btn btn-primary" disabled="@Loading" @onclick="Search">Rechercher Critères</button>
         <button class="btn btn-default" disabled="@(SelectedCleOpl is null)" @onclick="LoadSelected">Charger Informations</button>
         @{ var phoningUrl = ComputePhoningUrl(); }
@@ -285,14 +310,19 @@
         <button class="btn btn-default" disabled="@(SelectedCleOpl is null || Submitting)" @onclick="OpenSaveConfirm">Enregistrer Modification</button>
         <button class="btn btn-default" @onclick="ClearAll">Tout Effacer</button>
         <button class="btn btn-default" @onclick='() => Nav.NavigateTo("/clients")'>Fermer</button>
+        <span class="rc-count">@Results.Count enregistrement@(Results.Count != 1 ? "s" : "")</span>
     </div>
 
     <div class="rc-results table-wrap">
         <div style="@GridLayout.WrapperStyle(TotalWidth)">
-            <div class="header-row" style="position: sticky; top: 0;">
+            <div class="header-row" style="position: sticky; top: 0;" @ref="HeaderRowRef">
                 @foreach (var col in Columns)
                 {
-                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">@col.Label</div>
+                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
+                        <span class="col-sort-label @Sort.CssClass(col.Key)" @onclick='() => Sort.Toggle(col.Key)'>@col.Label @Sort.ArrowFor(col.Key)</span>
+                        <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                        <span class="col-resize-handle" data-col-key="@col.Key"></span>
+                    </div>
                 }
             </div>
             @if (Loading)
@@ -313,7 +343,7 @@
             }
             else
             {
-                <Virtualize Items="Results" Context="c" ItemSize="34">
+                <Virtualize Items="SortedResults" Context="c" ItemSize="34">
                     <div class="row @(c.CleOpl == SelectedCleOpl ? "selected" : "")"
                          @onclick="() => SelectedCleOpl = c.CleOpl">
                         @foreach (var col in Columns)
@@ -334,7 +364,6 @@
             }
         </div>
     </div>
-    <p class="count">@Results.Count enregistrement@(Results.Count != 1 ? "s" : "")</p>
 </div>
 
 @if (ConfirmSaveOpen)
@@ -415,7 +444,21 @@
         public string? StatutsClients { get; set; }
     }
 
-    private record ColumnDef(string Key, string Label, int Width);
+    // A class, not a record — Width needs to be mutable for column resize
+    // (records default positional properties to init-only).
+    private class ColumnDef
+    {
+        public string Key { get; }
+        public string Label { get; }
+        public int Width { get; set; }
+
+        public ColumnDef(string key, string label, int width)
+        {
+            Key = key;
+            Label = label;
+            Width = width;
+        }
+    }
 
     // Exact 27-column set from the real doc's Table_Req_Recherche_Partout,
     // reusing the same widths already established for these fields on
@@ -453,6 +496,26 @@
 
     private int TotalWidth => Columns.Sum(c => c.Width);
 
+    private string TabTitle
+    {
+        get
+        {
+            if (HasSearched)
+            {
+                return $"{Results.Count} résultat{(Results.Count != 1 ? "s" : "")} – Recherche Client";
+            }
+
+            var criterion = Input.RaisonSociale?.Trim() is { Length: > 0 } rs ? rs
+                : Input.Ville?.Trim() is { Length: > 0 } v ? v
+                : Input.Telephone?.Trim() is { Length: > 0 } t ? t
+                : Input.Portable?.Trim() is { Length: > 0 } p ? p
+                : Input.Email?.Trim() is { Length: > 0 } e ? e
+                : null;
+
+            return criterion is not null ? $"Recherche: {criterion}" : "Recherche Client Multi-Critères";
+        }
+    }
+
     private ClientSearchInput Input = new();
     private List<FranceOptique> Results = new();
     private long? SelectedCleOpl;
@@ -462,24 +525,24 @@
     private bool ConflictDialogOpen;
     private List<FieldConflict> Conflicts = new();
     private string? Error;
-    private long? FirstClientIdFallback;
     private bool HasSearched;
     private List<string> FamilleOptions = new();
     private List<string> FranchiseOptions = new();
     private List<string> PaysOptions = new();
     private List<string> AssistanteOptions = new();
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
 
-    // Only fetch made on page load — everything else here only runs off an
-    // explicit Rechercher Critères/Tout Effacer click, matching the legacy
-    // exactly (the grid starts empty, no query on open). This one exists so
-    // "Ouvrir le Phoning" with every field still blank has somewhere to
-    // point without needing an async lookup at click time (see
-    // ComputePhoningUrl for why that matters).
+    private List<FranceOptique> SortedResults => GridSort.Apply(GridFilter.Apply(Results, Filter, GetCellText), Sort, GetCellText);
+
+    // Everything here only runs off an explicit Rechercher Critères/Tout
+    // Effacer click, matching the legacy exactly (the grid starts empty,
+    // no query on open) — this OnInitializedAsync only loads the dropdown
+    // option lists, nothing client-search-related.
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            FirstClientIdFallback = await ClientSvc.GetFirstCleOplAsync();
             FamilleOptions = await FamilleSvc.ListAsync();
             FranchiseOptions = await FranchiseSvc.ListAsync();
             PaysOptions = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
@@ -491,6 +554,62 @@
         }
     }
 
+    private ElementReference HeaderRowRef;
+    private DotNetObjectReference<RechercheClientPage>? ResizeDotNetRef;
+    private bool ResizeAttached;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!ResizeAttached)
+        {
+            ResizeAttached = true;
+            ResizeDotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("mafaliColumnResize.attach", HeaderRowRef, ResizeDotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnColumnResized(string key, int width)
+    {
+        var col = Columns.FirstOrDefault(c => c.Key == key);
+        if (col is null) return;
+        col.Width = width;
+        StateHasChanged();
+    }
+
+    public class ColumnAutoFitData
+    {
+        public string Header { get; set; } = "";
+        public List<string> Values { get; set; } = new();
+    }
+
+    [JSInvokable]
+    public ColumnAutoFitData GetColumnAutoFitData(string key)
+    {
+        var col = Columns.FirstOrDefault(c => c.Key == key);
+        return new ColumnAutoFitData
+        {
+            Header = col?.Label ?? "",
+            Values = Results.Select(item => GetCellText(item, key)).ToList(),
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ResizeAttached)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("mafaliColumnResize.detach", HeaderRowRef);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone (e.g. tab closed) — nothing to clean up client-side.
+            }
+        }
+        ResizeDotNetRef?.Dispose();
+    }
+
     // Unlike Parcours_Client (a data-entry form, where Status de la Vente is
     // gated behind Opération = "Vente en Cours" because it's tied to a
     // specific data-entry action), this is a search screen — every field
@@ -499,6 +618,24 @@
     private void OnOperationChange(ChangeEventArgs e)
     {
         Input.OpEnCours = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString();
+    }
+
+    // Second way to run a search, alongside the Rechercher Critères button
+    // (Badr: fill a field, hit Enter). Bound to the whole criteria area
+    // (.rc-body), not one field at a time, so it works no matter which
+    // field you were last in — matches every other field's Contains/exact
+    // "fill in any subset, search across all of them" behavior. AutocompleteInput
+    // already handles Enter itself while its own suggestion list is open
+    // (selecting the highlighted suggestion) without stopping propagation,
+    // so this still fires on that same keystroke too — harmless here since
+    // Search() just re-runs against whatever's currently bound, not a
+    // destructive action.
+    private async Task HandleCriteriaKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !Loading)
+        {
+            await Search();
+        }
     }
 
     private async Task Search()
@@ -635,17 +772,18 @@
     // directly by the user, has none of that risk.
     //
     // The href has to be knowable synchronously for that to work, so the
-    // "nothing selected" fallback only covers the two cases where that's
-    // already true: a prior search's own first result (Results is already
-    // in memory — no new query needed), or, if the form is genuinely empty
-    // and no search has run yet, a single first-client value fetched once
-    // at page load (GetFirstCleOplAsync, below) rather than an unbounded
-    // fetch-then-open at click time.
+    // only "nothing selected" fallback is a prior search's own first
+    // result (Results is already in memory — no new query needed). No
+    // fallback at all for "form is empty, no search has run" — that used
+    // to silently open the first client in the whole france_optique table
+    // (GetFirstCleOplAsync), which Badr flagged as wrong: with no line
+    // chosen and no search run, ComputePhoningUrl returns null and the
+    // button below shows ShowPhoningSelectionError's message instead of
+    // guessing which client the user meant.
     private string? ComputePhoningUrl()
     {
         var startId = SelectedCleOpl;
         if (startId is null && Results.Count > 0) startId = Results[0].CleOpl;
-        if (startId is null && BuildConditions().Count == 0) startId = FirstClientIdFallback;
         if (startId is null) return null;
 
         var json = JsonSerializer.Serialize(BuildConditions());

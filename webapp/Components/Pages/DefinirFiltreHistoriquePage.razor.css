@@ -1,0 +1,261 @@
+/* Identical to DefinirFiltrePage.razor.css — Blazor scoped CSS is matched
+   by component filename, so this page's own copy of the exact same class
+   names (filter-table, value-btn, btn-add-value, btn-remove-value) picked
+   up none of that styling until this file existed, even though the markup
+   itself was already an exact mirror. See DefinirFiltrePage.razor.css for
+   the reasoning behind each rule — not repeated here, kept in lockstep. */
+
+.filter-table {
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.filter-table th,
+.filter-table td {
+    box-sizing: border-box;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-right: 1px solid var(--header-border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.filter-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--header-strong-bg);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--navy);
+    border-bottom: 3px solid var(--teal);
+}
+
+.filter-table tbody tr {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-lighter);
+}
+
+.filter-table tbody tr:nth-child(even) {
+    background: var(--row-alt);
+}
+
+.filter-table tbody tr:hover {
+    background: var(--row-hover);
+}
+
+.filter-table td.value-cell {
+    overflow: visible;
+    white-space: normal;
+}
+
+.value-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    flex-shrink: 0;
+    border-radius: 50%;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+}
+
+.value-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--navy);
+}
+
+.btn-add-value {
+    border: none;
+    background: var(--teal);
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(11, 35, 64, 0.25);
+}
+
+.btn-add-value:hover {
+    background: var(--teal-hover);
+}
+
+.btn-add-value:active {
+    background: var(--teal-active);
+    transform: scale(0.92);
+}
+
+.btn-remove-value {
+    border: 1.5px solid var(--danger);
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.btn-remove-value:hover {
+    background: var(--danger);
+    color: #ffffff;
+}
+
+.btn-remove-value:active {
+    transform: scale(0.92);
+}
+
+/* "Command Strip Workbench" — presentation only, appended on top of the
+   existing table/value-btn rules above (kept, not replaced). */
+
+.page {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 1px solid var(--color-workbench-border);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.toolbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.toolbar .title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.btn-primary {
+    background: var(--color-coral);
+    background-image: none;
+    color: #ffffff;
+    border: none;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.btn-outline,
+.btn-default {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-outline:hover:not(:disabled),
+.btn-default:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.search-bar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.search-input {
+    font-family: var(--font-sans-workbench);
+    border: 1px solid var(--color-workbench-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.modal-backdrop {
+    background: var(--color-ink-scrim);
+}
+
+.modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: -8px 8px 32px -20px rgba(23, 32, 51, 0.55);
+    font-family: var(--font-sans-workbench);
+}
+
+.modal h3 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+}
+
+/* Table overrides — same visual language as the div-based grids elsewhere:
+   hairline borders, uppercase tracked muted headers, no zebra. */
+.filter-table th,
+.filter-table td {
+    color: var(--color-ink);
+    font-family: var(--font-sans-workbench);
+    border-right: 1px solid var(--color-workbench-border);
+}
+
+.filter-table thead th {
+    background: var(--color-paper);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.filter-table tbody tr {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.filter-table tbody tr:nth-child(even) {
+    background: var(--color-surface);
+}
+
+.filter-table tbody tr:hover {
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-ink) 4%);
+}
+
+.value-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.btn-add-value {
+    background: var(--color-coral);
+    box-shadow: none;
+}
+
+.btn-add-value:hover {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.btn-add-value:active {
+    background: var(--color-coral);
+    filter: brightness(0.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .value-btn,
+    .filter-table tbody tr {
+        transition: none !important;
+    }
+}

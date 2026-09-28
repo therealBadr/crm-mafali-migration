@@ -208,7 +208,18 @@ public class ClientImportExportService
             row++;
         }
 
-        sheet.Columns().AdjustToContents();
+        // AdjustToContents() with no row range measures the rendered width
+        // of every cell in every column — fine at the ~488-row test size
+        // this was built against, but catastrophically slow against real
+        // production data (93,235 rows × ~39 columns is ~3.6M cells to
+        // measure). Confirmed live: that blocked the single request thread
+        // long enough for the Blazor Server circuit to silently disconnect
+        // before the export ever finished — no exception, no error shown,
+        // "Exporter" just did nothing (Badr, 2026-09-22). Restricting the
+        // measurement to row 1 (the header) is the standard fix for this —
+        // still sizes columns sensibly off the header text, just doesn't
+        // scale with row count at all.
+        sheet.Columns().AdjustToContents(1, 1);
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);

@@ -1,11 +1,12 @@
 @page "/fichier-filtres"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject FiltreOperatriceService FiltreSvc
 @inject AssistanteService AssistanteSvc
 @inject CurrentUserService CurrentUser
 
 <PageTitle>Fichier des Filtres</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Table des Filtres par Opérateur</span>
     <div class="actions">
@@ -44,9 +45,18 @@ else
 {
     <div class="table-wrap">
         <div class="header-row">
-            <div class="cell" style="flex: 0 0 180px;">Opérateur</div>
-            <div class="cell" style="flex: 0 0 220px;">Nom du Filtre</div>
-            <div class="cell">Filtre Réel</div>
+            <div class="cell @Sort.CssClass("operateur")" style="flex: 0 0 180px;" @onclick='() => Sort.Toggle("operateur")'>
+                Opérateur @Sort.ArrowFor("operateur")
+                <ColumnFilterIcon Column="operateur" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("filtre")" style="flex: 0 0 220px;" @onclick='() => Sort.Toggle("filtre")'>
+                Nom du Filtre @Sort.ArrowFor("filtre")
+                <ColumnFilterIcon Column="filtre" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("reel")" @onclick='() => Sort.Toggle("reel")'>
+                Filtre Réel @Sort.ArrowFor("reel")
+                <ColumnFilterIcon Column="reel" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
         </div>
         @foreach (var f in Filtered)
         {
@@ -87,6 +97,8 @@ else
     private string SearchTerm = string.Empty;
     private bool Loading = true;
     private string? Error;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
 
     private List<string> Assistantes = new();
     private bool ModalOpen;
@@ -103,15 +115,30 @@ else
 
     private static string RowKey(FiltreOperatrice f) => $"{f.NomOperateur} {f.NomFiltre}";
 
-    private List<FiltreOperatrice> Filtered =>
-        string.IsNullOrWhiteSpace(SearchTerm)
-            ? Items
-            : Items.Where(f => (SearchColumn switch
-            {
-                "filtre" => f.NomFiltre,
-                "reel" => f.FiltreReel ?? "",
-                _ => f.NomOperateur,
-            }).Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+    private List<FiltreOperatrice> Filtered
+    {
+        get
+        {
+            var list = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Items
+                : Items.Where(f => (SearchColumn switch
+                {
+                    "filtre" => f.NomFiltre,
+                    "reel" => f.FiltreReel ?? "",
+                    _ => f.NomOperateur,
+                }).Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            list = GridFilter.Apply(list, Filter, GetSortText);
+            return GridSort.Apply(list, Sort, GetSortText);
+        }
+    }
+
+    private static string GetSortText(FiltreOperatrice f, string column) => column switch
+    {
+        "operateur" => f.NomOperateur ?? "",
+        "filtre" => f.NomFiltre ?? "",
+        "reel" => f.FiltreReel ?? "",
+        _ => "",
+    };
 
     protected override async Task OnInitializedAsync()
     {

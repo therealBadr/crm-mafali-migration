@@ -216,19 +216,31 @@ public class ClientFilterService
         ["cle_opl"] = "Cle_Opl",
     };
 
+    // Leading space on every entry, not just cosmetic: BuildSingleConditionClause
+    // concatenates this directly onto the bare field name with no separator
+    // (e.g. "Franchise" + this), and FiltreReelParser's tokenizer has no
+    // notion of a word boundary other than whitespace/punctuation — a
+    // word-starting template like "LIKE ..." or "BETWEEN ..." glues onto the
+    // field name into one unparseable identifier ("FranchiseLIKE") without
+    // it. Confirmed live: a builder-generated Contains filter saved and
+    // reloaded via Filtres Prédéfinis/Fichier Historique's "Filtre :" picker
+    // threw "Unknown field FranchiseLIKE" before this fix. The
+    // punctuation-leading templates (=, <>, <, etc.) didn't need the space to
+    // parse correctly, but it's added there too for consistency with the
+    // legacy doc's own convention ("Famille =", "Telephone LIKE").
     private static readonly Dictionary<Operator, string> LegacyOperatorTemplate = new()
     {
-        [Operator.Eq] = "='%1'",
-        [Operator.Ne] = "<>'%1'",
-        [Operator.Lt] = "<'%1'",
-        [Operator.Lte] = "<='%1'",
-        [Operator.Gt] = ">'%1'",
-        [Operator.Gte] = ">='%1'",
-        [Operator.Contains] = "LIKE '%%1%'",
-        [Operator.StartsWith] = "LIKE '%1%'",
-        [Operator.NotStartsWith] = "NOT LIKE '%1%'",
-        [Operator.NotContains] = "NOT LIKE '%%1%'",
-        [Operator.Between] = "BETWEEN '%1' AND '%2'",
+        [Operator.Eq] = " ='%1'",
+        [Operator.Ne] = " <>'%1'",
+        [Operator.Lt] = " <'%1'",
+        [Operator.Lte] = " <='%1'",
+        [Operator.Gt] = " >'%1'",
+        [Operator.Gte] = " >='%1'",
+        [Operator.Contains] = " LIKE '%%1%'",
+        [Operator.StartsWith] = " LIKE '%1%'",
+        [Operator.NotStartsWith] = " NOT LIKE '%1%'",
+        [Operator.NotContains] = " NOT LIKE '%%1%'",
+        [Operator.Between] = " BETWEEN '%1' AND '%2'",
     };
 
     // Badr's explicit direction: filtre_reel should read the same way it
@@ -430,41 +442,121 @@ public class ClientFilterService
             var parts = c.Values.Select(v =>
             {
                 var idx = args.Count; args.Add(CastValue(meta.Type, v));
-                return $"({OperatorTemplate(prop, c.Operator, $"@{idx}")})";
+                return $"({OperatorTemplate(prop, EffectiveOperator(c.Operator, v), $"@{idx}", meta.Type, args)})";
             });
             return string.Join($" {joiner} ", parts);
         }
 
         var index = args.Count; args.Add(CastValue(meta.Type, c.Values[0]));
-        return OperatorTemplate(prop, c.Operator, $"@{index}");
+        return OperatorTemplate(prop, EffectiveOperator(c.Operator, c.Values[0]), $"@{index}", meta.Type, args);
+    }
+
+    // HFSQL's SYSDATE is a moment in time ("right now"), not a calendar
+    // date — comparing a date-only field against it with "<" still needs
+    // to include a reminder dated exactly today, since midnight-today is
+    // always earlier than the current moment. Confirmed against real
+    // data: Bruno's "Optique Luxembourg à rappeler" filter
+    // (Date_Rappel < SYSDATE) returned 151 here (today excluded) vs the
+    // legacy's 209 — the exact 58-row gap was every "exactly today" row
+    // that also had a real phone number (see BuildBlankClause below),
+    // meaning the legacy really does treat "today" as already due under
+    // strict "<". Only Lt is adjusted (to Lte) — Lte/Gt already produce
+    // the right boundary unadjusted, and Gte/Eq have no real saved-filter
+    // usage of SYSDATE to verify against, so they're deliberately left
+    // alone rather than guessed at.
+    internal static Operator EffectiveOperator(Operator op, string raw) =>
+        op == Operator.Lt && raw == "SYSDATE" ? Operator.Lte : op;
+
+    // HFSQL compares text case- and accent-insensitively by default (a real
+    // client on both sides confirmed this: legacy vs. this app's counts only
+    // ever diverged on filters where the saved text's casing/accents didn't
+    // exactly match the stored data — e.g. "PAYS = 'FRANCE'" against a
+    // stored "France" returned 0 here but 7,088 in the legacy system, and
+    // "Optic 2000" against a stored "OPTIC 2000" returned 0 here but 123
+    // there; both now match exactly). Plain .ToLower() handles casing;
+    // accents are folded via explicit .Replace() calls for the actual
+    // accented characters found in the real data — not full Unicode
+    // normalization (no NFD/combining-mark stripping), but this covers every
+    // character that appears in this app's own French business data, and
+    // every replacement is a bound parameter (@N), never a literal accented
+    // character spliced into the predicate string itself.
+    private static readonly (string From, string To)[] AccentFolds =
+    {
+        ("é", "e"), ("è", "e"), ("ê", "e"), ("ë", "e"),
+        ("à", "a"), ("â", "a"), ("ä", "a"),
+        ("ù", "u"), ("û", "u"), ("ü", "u"),
+        ("ô", "o"), ("ö", "o"),
+        ("î", "i"), ("ï", "i"),
+        ("ç", "c"),
+        ("œ", "oe"),
+        ("ñ", "n"),
+    };
+
+    private static string Fold(string expr, List<object> args)
+    {
+        var result = $"{expr}.ToLower()";
+        foreach (var (from, to) in AccentFolds)
+        {
+            var fromIndex = args.Count; args.Add(from);
+            var toIndex = args.Count; args.Add(to);
+            result = $"{result}.Replace(@{fromIndex}, @{toIndex})";
+        }
+        return result;
     }
 
     // internal, not private: FiltreReelParser reuses this so parsed raw
-    // filter text produces the exact same null-safe predicate shape
-    // (StartsWith/Contains guarded with "!= null &&") as the structured
-    // builder — not just for DRY, the null guard is a real correctness
-    // requirement wherever a text column can be NULL.
-    internal static string OperatorTemplate(string prop, Operator op, string placeholder) => op switch
+    // filter text produces the exact same null-safe, case/accent-folded
+    // predicate shape as the structured builder. `type`/`args` are only
+    // used to fold Text comparisons (see Fold above) — every other field
+    // type compares exactly as before, casing/accents being meaningless for
+    // numbers/dates/times/booleans. The null guard on StartsWith/Contains
+    // still checks the raw, unfolded `prop` — lower-casing/replacing a NULL
+    // string still yields NULL, so the check is equivalent either way, and
+    // keeping it on `prop` avoids relying on that being true.
+    internal static string OperatorTemplate(string prop, Operator op, string placeholder, FieldType type, List<object> args)
     {
-        Operator.Eq => $"{prop} == {placeholder}",
-        Operator.Ne => $"{prop} != {placeholder}",
-        Operator.Gt => $"{prop} > {placeholder}",
-        Operator.Gte => $"{prop} >= {placeholder}",
-        Operator.Lt => $"{prop} < {placeholder}",
-        Operator.Lte => $"{prop} <= {placeholder}",
-        Operator.StartsWith => $"{prop} != null && {prop}.StartsWith({placeholder})",
-        Operator.NotStartsWith => $"{prop} == null || !{prop}.StartsWith({placeholder})",
-        Operator.Contains => $"{prop} != null && {prop}.Contains({placeholder})",
-        Operator.NotContains => $"{prop} == null || !{prop}.Contains({placeholder})",
-        _ => throw new InvalidOperationException($"Unsupported operator: {op}"),
-    };
+        var lhs = type == FieldType.Text ? Fold(prop, args) : prop;
+        var rhs = type == FieldType.Text ? Fold(placeholder, args) : placeholder;
 
-    private static object CastValue(FieldType type, string raw) => type switch
-    {
-        FieldType.Number => long.Parse(raw),
-        FieldType.Date => DateOnly.Parse(raw),
-        FieldType.Time => TimeOnly.Parse(raw),
-        FieldType.Boolean => bool.Parse(raw),
-        _ => raw,
-    };
+        // HFSQL stores empty text as "" and empty dates/numbers as 0 — the
+        // minimum of the type — not NULL. Comparisons therefore treat an
+        // empty value as "anything": "" <> '9999' matches, 0 < SYSDATE (today)
+        // matches, but "" = 'X' and 0 > SYSDATE never do. Postgres NULLs are
+        // the migrated form of those empties (see migration/csv_common.py),
+        // so the same semantics are reproduced here: < <= and <>/NOT-type
+        // comparisons include NULL, while = > >= BETWEEN (and the
+        // positive Contains/StartsWith, which an empty string can't contain
+        // anything) exclude it. Both sides are folded for Text so empties
+        // stay empties through the fold.
+        return op switch
+        {
+            Operator.Eq => $"({lhs} != null && {lhs} == {rhs})",
+            Operator.Ne => $"({lhs} == null || {lhs} != {rhs})",
+            Operator.Gt => $"({lhs} != null && {lhs} > {rhs})",
+            Operator.Gte => $"({lhs} != null && {lhs} >= {rhs})",
+            Operator.Lt => $"({lhs} == null || {lhs} < {rhs})",
+            Operator.Lte => $"({lhs} == null || {lhs} <= {rhs})",
+            Operator.StartsWith => $"({prop} != null && {lhs}.StartsWith({rhs}))",
+            Operator.NotStartsWith => $"({prop} == null || !{lhs}.StartsWith({rhs}))",
+            Operator.Contains => $"({prop} != null && {lhs}.Contains({rhs}))",
+            Operator.NotContains => $"({prop} == null || !{lhs}.Contains({rhs}))",
+            _ => throw new InvalidOperationException($"Unsupported operator: {op}"),
+        };
+    }
+
+    // "SYSDATE" (DefinirFiltrePage's "Aujourd'hui" checkbox, or a saved
+    // filtre_reel containing the keyword) resolves to today, same special
+    // case FiltreReelParser.CastLegacyValue already applies when re-running
+    // a saved filter — needed here too since this path backs Définir un
+    // Filtre's own live "Rechercher" preview, before anything is saved.
+    private static object CastValue(FieldType type, string raw) =>
+        (type, raw) switch
+        {
+            (FieldType.Date, "SYSDATE") => DateOnly.FromDateTime(DateTime.Today),
+            (FieldType.Number, _) => long.Parse(raw),
+            (FieldType.Date, _) => DateOnly.Parse(raw),
+            (FieldType.Time, _) => TimeOnly.Parse(raw),
+            (FieldType.Boolean, _) => bool.Parse(raw),
+            _ => raw,
+        };
 }

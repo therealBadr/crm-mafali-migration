@@ -19,5 +19,9 @@ public partial class User
 
     public DateTime CreatedAt { get; set; }
 
+    public int FailedLoginCount { get; set; }
+
+    public DateTime? LockoutUntil { get; set; }
+
     public virtual ICollection<LoginHistory> LoginHistories { get; set; } = new List<LoginHistory>();
 }

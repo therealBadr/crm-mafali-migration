@@ -3,9 +3,20 @@
    blind free-text box. Debounced on the C# side (cancel-and-restart via
    CancellationTokenSource) rather than JS — this app already avoids custom
    JS wherever a server-side equivalent is simple enough, and this qualifies.
-   Selecting a suggestion uses the mousedown-preventDefault + click split so
-   the input never loses focus (and blurs the dropdown away) before the
-   click actually registers. *@
+   Selection fires on mousedown, not click (Badr, 2026-09-21: reproduced on
+   two machines — "it gives suggestion and when i click on it it
+   disappears instead of being written in the field"). The previous version
+   fired SelectSuggestion on @onclick and only used
+   @onmousedown:preventDefault to stop the input's blur from closing the
+   list first — a real race between "does preventDefault win before the
+   browser's blur default-action" and "does the later click event still
+   land on the item." That race apparently loses on real hardware clicks
+   often enough to be the normal experience, even though it happened to
+   win in an automated click test here. Doing the selection ON mousedown
+   sidesteps the race entirely: the value is written and the list closed
+   during the very same event whose default action would otherwise cause
+   the blur, so it no longer matters whether blur fires afterward or which
+   event "wins." *@
 @implements IDisposable
 
 <div class="ac-wrap">
@@ -19,7 +30,7 @@
                 var idx = i;
                 var s = Suggestions[i];
                 <div class="ac-suggestion @(idx == HighlightedIndex ? "ac-suggestion-highlighted" : "")"
-                     @onmousedown:preventDefault="true" @onclick="() => SelectSuggestion(s)"
+                     @onmousedown="() => SelectSuggestion(s)" @onmousedown:preventDefault="true"
                      @onmouseenter="() => HighlightedIndex = idx">
                     @s
                 </div>

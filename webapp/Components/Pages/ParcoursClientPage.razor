@@ -11,8 +11,10 @@
 @inject PaysService PaysSvc
 @inject AssistanteService AssistanteSvc
 @inject BonCommandeTemplateService BcTemplateSvc
+@inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* Mirrors Fen_Parcours_Client — the daily "browse a result set, log an
    interaction" screen, the most business-logic-dense window in the legacy
@@ -44,10 +46,11 @@
    Gating — traced from the real doc's "Groupe" assignments field by field,
    not assumed:
    - MajDisabled fields (Etat Client, Assistante, Opération, Date/Heure
-     Rappel, Responsable Achat, Telephone, Portable, Fax): disabled only
+     Rappel, Responsable Achat, Telephone, Portable): disabled only
      when the client is Bloqué. Navigation itself stays enabled even when
      Bloqué — confirmed in the doc's own Precedent/Premier/Suivant/Dernier
-     handling.
+     handling. Fax dropped from this page entirely (2026-09-22, Badr: "we
+     dont use it anymore") — was here, not touched anywhere else yet.
    - InterModifClientDisabled fields (everything address/identity — Famille,
      Raison Sociale, Complement, Rue, Localisation 1/2, Ville, Code Postal,
      Pays, Magasin Principal, Franchise 1-4, Statuts Clients, Email, Note
@@ -76,12 +79,24 @@
    Clients grid.
 
    Phone masking: Pays.Masque is used as a placeholder/format hint on
-   Telephone/Telephone Bis, Indicatif shown read-only — not a literal
-   character-by-character masked-input widget. *@
+   Telephone (the primary field) only, Indicatif shown read-only — not a
+   literal character-by-character masked-input widget. Telephone Bis used
+   to show the same mask placeholder too, dropped 2026-09-22 per Badr
+   ("remove the field shadow... the nine nine nine") — Telephone Bis was
+   never actually gated the same as Telephone anyway (see above), so this
+   also stops it visually implying a format it was never enforcing. *@
 
-<PageTitle>Parcours Client</PageTitle>
+@* Dynamic tab title — a salesperson working several clients/filters at
+   once ends up with a wall of identical "Parcours Client" tabs otherwise,
+   with no way to tell them apart. Falls back to the generic title before
+   a client's loaded. Trims before checking length — legacy HFSQL data has
+   real whitespace-only raison_sociale values (confirmed live: the
+   default no-filter landing loads the first client in an unordered list,
+   which turned out to be exactly this case), and a plain length check
+   let a title of just "– Parcours Client" through. *@
+<PageTitle>@(Client?.RaisonSociale?.Trim() is { Length: > 0 } clientName ? $"{clientName} – Parcours Client" : "Parcours Client")</PageTitle>
 
-<div class="pc-page">
+<div class="pc-page page-flush">
 @if (Loading)
 {
     <p class="dimmed">Chargement…</p>
@@ -100,10 +115,10 @@ else if (Client is not null)
         </div>
         <div class="pc-topbar-group">
             <span class="pc-position">@(CurrentIndex + 1) / @ClientIds.Count</span>
-            <button class="btn btn-outline" @onclick="GoFirst" title="Premier">|&lt;</button>
-            <button class="btn btn-outline" @onclick="GoPrevious" title="Précédent">&lt;</button>
-            <button class="btn btn-outline" @onclick="GoNext" title="Suivant">&gt;</button>
-            <button class="btn btn-outline" @onclick="GoLast" title="Dernier">&gt;|</button>
+            <button class="btn btn-outline pc-nav-arrow" @onclick="GoFirst" title="Premier">|&lt;</button>
+            <button class="btn btn-outline pc-nav-arrow" @onclick="GoPrevious" title="Précédent">&lt;</button>
+            <button class="btn btn-outline pc-nav-arrow" @onclick="GoNext" title="Suivant">&gt;</button>
+            <button class="btn btn-outline pc-nav-arrow" @onclick="GoLast" title="Dernier">&gt;|</button>
             <input class="text-input pc-goto" type="number" min="1" max="@ClientIds.Count"
                    @bind-value="GoToInput" @bind-value:event="oninput"
                    placeholder="N°" title="Aller à la position N°" @onkeydown="OnGoToKeyDown" />
@@ -115,14 +130,21 @@ else if (Client is not null)
         </div>
         <div class="pc-topbar-group">
             <label>Etat Client</label>
-            <select class="text-input pc-select-sm" value="@(Client.EtatClient ?? "0")" disabled="@MajDisabled"
+            @* No "Non défini" option anymore (2026-09-04) — Prospect is the
+               default. Coerced display only: any stored value that isn't
+               literally "1" shows as Prospect selected, but Client.EtatClient
+               itself is untouched unless this dropdown is actually changed —
+               existing legacy junk ("0"/""/"-1"/typos) is never silently
+               rewritten just because a client gets viewed or saved for an
+               unrelated reason (confirmed with Badr — cosmetic-only, no bulk
+               data migration). *@
+            <select class="text-input pc-select-sm" value="@(Client.EtatClient == "1" ? "1" : "2")" disabled="@MajDisabled"
                     @onchange="e => Client!.EtatClient = e.Value?.ToString()">
-                <option value="0">Non défini</option>
                 <option value="1">Client</option>
                 <option value="2">Prospect</option>
             </select>
             <label class="checkbox-label" style="margin-bottom: 0;">
-                <input type="checkbox" checked="@Client.Bloque" @onchange="e => Client!.Bloque = (bool)(e.Value ?? false)" />
+                <input type="checkbox" checked="@Client.Bloque" disabled="@IsCommercial" @onchange="e => Client!.Bloque = (bool)(e.Value ?? false)" />
                 Bloqué
             </label>
             @if (Client.Bloque)
@@ -157,25 +179,29 @@ else if (Client is not null)
                 <input class="text-input" maxlength="60" value="@Client.RaisonSociale" disabled="@InterModifClientDisabled"
                        @oninput="e => Client!.RaisonSociale = e.Value?.ToString()" />
             </div>
-            <div class="pc-field">
-                <label>Complement</label>
-                <input class="text-input" maxlength="60" value="@Client.Complement" disabled="@InterModifClientDisabled"
-                       @oninput="e => Client!.Complement = e.Value?.ToString()" />
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>Complement</label>
+                    <input class="text-input" maxlength="60" value="@Client.Complement" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Complement = e.Value?.ToString()" />
+                </div>
+                <div class="pc-field">
+                    <label>Rue</label>
+                    <input class="text-input" maxlength="60" value="@Client.Rue" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Rue = e.Value?.ToString()" />
+                </div>
             </div>
-            <div class="pc-field">
-                <label>Rue</label>
-                <input class="text-input" maxlength="60" value="@Client.Rue" disabled="@InterModifClientDisabled"
-                       @oninput="e => Client!.Rue = e.Value?.ToString()" />
-            </div>
-            <div class="pc-field">
-                <label>Localisation 1</label>
-                <input class="text-input" maxlength="60" value="@Client.Localisation1" disabled="@InterModifClientDisabled"
-                       @oninput="e => Client!.Localisation1 = e.Value?.ToString()" />
-            </div>
-            <div class="pc-field">
-                <label>Localisation 2</label>
-                <input class="text-input" maxlength="60" value="@Client.Localisation2" disabled="@InterModifClientDisabled"
-                       @oninput="e => Client!.Localisation2 = e.Value?.ToString()" />
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>Localisation 1</label>
+                    <input class="text-input" maxlength="60" value="@Client.Localisation1" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Localisation1 = e.Value?.ToString()" />
+                </div>
+                <div class="pc-field">
+                    <label>Localisation 2</label>
+                    <input class="text-input" maxlength="60" value="@Client.Localisation2" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.Localisation2 = e.Value?.ToString()" />
+                </div>
             </div>
             <div class="pc-field-row">
                 <div class="pc-field">
@@ -189,90 +215,98 @@ else if (Client is not null)
                            @oninput="e => Client!.Ville = e.Value?.ToString()" />
                 </div>
             </div>
-            <div class="pc-field">
-                <label>Pays</label>
-                <select class="text-input" value="@(Client.Pays ?? "")" disabled="@InterModifClientDisabled"
-                        @onchange="e => Client!.Pays = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var p in PaysOptions)
-                    {
-                        <option value="@p">@p</option>
-                    }
-                </select>
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>Pays</label>
+                    <select class="text-input" value="@(Client.Pays ?? "")" disabled="@InterModifClientDisabled"
+                            @onchange="e => Client!.Pays = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var p in PaysOptions)
+                        {
+                            <option value="@p">@p</option>
+                        }
+                    </select>
+                </div>
+                <div class="pc-field" style="flex: 2;">
+                    <label>Magasin Principal</label>
+                    <input class="text-input" maxlength="50" value="@Client.MagasinPrincipal" disabled="@InterModifClientDisabled"
+                           @oninput="e => Client!.MagasinPrincipal = e.Value?.ToString()" />
+                </div>
             </div>
-            <div class="pc-field">
-                <label>Magasin Principal</label>
-                <input class="text-input" maxlength="50" value="@Client.MagasinPrincipal" disabled="@InterModifClientDisabled"
-                       @oninput="e => Client!.MagasinPrincipal = e.Value?.ToString()" />
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>Franchise</label>
+                    <select class="text-input" value="@(Client.Franchise ?? "")" disabled="@InterModifClientDisabled"
+                            @onchange="e => Client!.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
+                <div class="pc-field">
+                    <label>Franchise 2</label>
+                    <select class="text-input" value="@(Client.Franchise2 ?? "")" disabled="@InterModifClientDisabled"
+                            @onchange="e => Client!.Franchise2 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
             </div>
-            <div class="pc-field">
-                <label>Franchise</label>
-                <select class="text-input" value="@(Client.Franchise ?? "")" disabled="@InterModifClientDisabled"
-                        @onchange="e => Client!.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
-            </div>
-            <div class="pc-field">
-                <label>Franchise 2</label>
-                <select class="text-input" value="@(Client.Franchise2 ?? "")" disabled="@InterModifClientDisabled"
-                        @onchange="e => Client!.Franchise2 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
-            </div>
-            <div class="pc-field">
-                <label>Franchise 3</label>
-                <select class="text-input" value="@(Client.Franchise3 ?? "")" disabled="@InterModifClientDisabled"
-                        @onchange="e => Client!.Franchise3 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
-            </div>
-            <div class="pc-field">
-                <label>Franchise 4</label>
-                <select class="text-input" value="@(Client.Franchise4 ?? "")" disabled="@InterModifClientDisabled"
-                        @onchange="e => Client!.Franchise4 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var f in FranchiseOptions)
-                    {
-                        <option value="@f">@f</option>
-                    }
-                </select>
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>Franchise 3</label>
+                    <select class="text-input" value="@(Client.Franchise3 ?? "")" disabled="@InterModifClientDisabled"
+                            @onchange="e => Client!.Franchise3 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
+                <div class="pc-field">
+                    <label>Franchise 4</label>
+                    <select class="text-input" value="@(Client.Franchise4 ?? "")" disabled="@InterModifClientDisabled"
+                            @onchange="e => Client!.Franchise4 = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var f in FranchiseOptions)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </div>
             </div>
         </div>
 
         <div class="pc-col">
             <h4 class="pc-col-title">Contact / Opération en cours</h4>
-            <div class="pc-field">
-                <label>Assistante Commerciale :</label>
-                <select class="text-input" value="@(Client.AssistanteCommercial ?? "")" disabled="@MajDisabled"
-                        @onchange="e => Client!.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
-                    <option value="">—</option>
-                    @foreach (var a in AssistanteOptions)
-                    {
-                        <option value="@a">@a</option>
-                    }
-                </select>
-            </div>
-            <div class="pc-field">
-                <label>Responsable Achats :</label>
-                <input class="text-input" maxlength="50" value="@Client.ResponsableAchat" disabled="@MajDisabled"
-                       @oninput="e => Client!.ResponsableAchat = e.Value?.ToString()" />
+            <div class="pc-field-row">
+                <div class="pc-field">
+                    <label>Assistante Commerciale :</label>
+                    <select class="text-input" value="@(Client.AssistanteCommercial ?? "")" disabled="@MajDisabled"
+                            @onchange="e => Client!.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                        <option value="">—</option>
+                        @foreach (var a in AssistanteOptions)
+                        {
+                            <option value="@a">@a</option>
+                        }
+                    </select>
+                </div>
+                <div class="pc-field">
+                    <label>Responsable Achats :</label>
+                    <input class="text-input" maxlength="50" value="@Client.ResponsableAchat" disabled="@MajDisabled"
+                           @oninput="e => Client!.ResponsableAchat = e.Value?.ToString()" />
+                </div>
             </div>
             <div class="pc-field-row">
                 <div class="pc-field" style="flex: 2;">
-                    <label>Telephone de référence :</label>
-                    <input class="text-input" maxlength="20" value="@Client.Telephone" disabled="@MajDisabled"
+                    <label>Telephone :</label>
+                    <input class="text-input pc-phone-primary" maxlength="20" value="@Client.Telephone" disabled="@MajDisabled"
                            placeholder="@CurrentMask" @oninput="e => Client!.Telephone = e.Value?.ToString()" />
                 </div>
                 <div class="pc-field">
@@ -282,7 +316,7 @@ else if (Client is not null)
             </div>
             <div class="pc-field">
                 <label>Telephone Bis</label>
-                <input class="text-input" maxlength="20" value="@Client.TelBis" placeholder="@CurrentMask"
+                <input class="text-input" maxlength="20" value="@Client.TelBis"
                        @oninput="e => Client!.TelBis = e.Value?.ToString()" />
             </div>
             <div class="pc-field-row">
@@ -291,35 +325,32 @@ else if (Client is not null)
                     <input class="text-input" maxlength="20" value="@Client.Portable" disabled="@MajDisabled"
                            @oninput="e => Client!.Portable = e.Value?.ToString()" />
                 </div>
+            </div>
+            <div class="pc-field-row">
                 <div class="pc-field">
-                    <label>Fax</label>
-                    <input class="text-input" maxlength="20" value="@Client.Fax" disabled="@MajDisabled"
-                           @oninput="e => Client!.Fax = e.Value?.ToString()" />
+                    <label>Opération :</label>
+                    <select class="text-input" value="@(Client.OpEnCours ?? "")" disabled="@MajDisabled" @onchange="OnOperationChange">
+                        <option value="">—</option>
+                        <option value="A Rappeler Mois">A Rappeler Mois</option>
+                        <option value="A Rappeler Date">A Rappeler Date</option>
+                        <option value="A Rappeler Date Heure">A Rappeler Date Heure</option>
+                        <option value="Pas Intéressé">Pas Intéressé</option>
+                        <option value="Vente en Cours">Vente en Cours</option>
+                        <option value="Production">Production</option>
+                    </select>
                 </div>
-            </div>
-            <div class="pc-field">
-                <label>Opération :</label>
-                <select class="text-input" value="@(Client.OpEnCours ?? "")" disabled="@MajDisabled" @onchange="OnOperationChange">
-                    <option value="">—</option>
-                    <option value="A Rappeler Mois">A Rappeler Mois</option>
-                    <option value="A Rappeler Date">A Rappeler Date</option>
-                    <option value="A Rappeler Date Heure">A Rappeler Date Heure</option>
-                    <option value="Pas Intéressé">Pas Intéressé</option>
-                    <option value="Vente en Cours">Vente en Cours</option>
-                    <option value="Production">Production</option>
-                </select>
-            </div>
-            <div class="pc-field">
-                <label>Status de la Vente :</label>
-                <select class="text-input" value="@(Client.StatusVente ?? "-1")" disabled="@StatusDisabled" @onchange="OnStatusChange">
-                    <option value="-1">—</option>
-                    <option value="Devis en cours">Devis en cours</option>
-                    <option value="Vente (BAT Signé)">Vente (BAT Signé)</option>
-                    <option value="Vente (BAT Original)">Vente (BAT Original)</option>
-                    <option value="Vente (Bon de Commande)">Vente (Bon de Commande)</option>
-                    <option value="Vente Annulée">Vente Annulée</option>
-                    <option value="Production">Production</option>
-                </select>
+                <div class="pc-field">
+                    <label>Status de la Vente :</label>
+                    <select class="text-input" value="@(Client.StatusVente ?? "-1")" disabled="@StatusDisabled" @onchange="OnStatusChange">
+                        <option value="-1">—</option>
+                        <option value="Devis en cours">Devis en cours</option>
+                        <option value="Vente (BAT Signé)">Vente (BAT Signé)</option>
+                        <option value="Vente (BAT Original)">Vente (BAT Original)</option>
+                        <option value="Vente (Bon de Commande)">Vente (Bon de Commande)</option>
+                        <option value="Vente Annulée">Vente Annulée</option>
+                        <option value="Production">Production</option>
+                    </select>
+                </div>
             </div>
             @if (ShowProduction)
             {
@@ -372,11 +403,6 @@ else if (Client is not null)
                 </select>
             </div>
             <div class="pc-field">
-                <label>Note Permanente</label>
-                <input class="text-input" value="@Client.NotePerm" disabled="@InterModifClientDisabled"
-                       @oninput="e => Client!.NotePerm = e.Value?.ToString()" />
-            </div>
-            <div class="pc-field">
                 <label>Email</label>
                 <input class="text-input" type="email" maxlength="50" value="@Client.Email" disabled="@InterModifClientDisabled"
                        @oninput="e => Client!.Email = e.Value?.ToString()" />
@@ -388,43 +414,40 @@ else if (Client is not null)
                     Modifier la Note
                 </label>
                 <label>Notes :</label>
-                <textarea class="text-input" rows="4" value="@Client.Note" disabled="@(!InterModifNote)"
+                <textarea class="text-input" rows="3" value="@Client.Note" disabled="@(!InterModifNote)"
                           @oninput="e => Client!.Note = e.Value?.ToString()"></textarea>
             </div>
         </div>
 
         <div class="pc-col">
             <h4 class="pc-col-title">Chiffre d'Affaire</h4>
-            <div class="pc-ca-panel">
-                <div class="pc-ca-list">
-                    @if (CaList.Count == 0)
-                    {
-                        <p class="dimmed" style="padding: 8px;">Aucun chiffre d'affaire enregistré.</p>
-                    }
-                    else
-                    {
-                        @foreach (var ca in CaList)
+            <div class="pc-ca-note-row">
+                <div class="pc-ca-panel">
+                    <div class="pc-ca-list">
+                        @if (CaList.Count == 0)
                         {
-                            <div class="pc-ca-row">
-                                <span>@ca.Annee</span>
-                                <span>---&gt;</span>
-                                <span>@(ca.Ca1?.ToString() ?? "0")</span>
-                            </div>
+                            <p class="dimmed" style="padding: 8px;">Aucun chiffre d'affaire enregistré.</p>
                         }
-                    }
+                        else
+                        {
+                            @foreach (var ca in CaList)
+                            {
+                                <div class="pc-ca-row">
+                                    <span>@ca.Annee</span>
+                                    <span>---&gt;</span>
+                                    <span>@(ca.Ca1?.ToString() ?? "0")</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                    <button class="btn btn-default" style="width: 100%; margin-top: 8px;" @onclick="OpenCaModal" disabled="@MajDisabled">
+                        Ajout/Modif. CA
+                    </button>
                 </div>
-                <button class="btn btn-default" style="width: 100%; margin-top: 8px;" @onclick="OpenCaModal" disabled="@MajDisabled">
-                    Ajout/Modif. CA
-                </button>
-            </div>
-            <div class="pc-field-row" style="margin-top: 12px;">
-                <div class="pc-field">
-                    <label>C.A Mag @YearMinus1 :</label>
-                    <input class="text-input" value="@(CaForYear(YearMinus1)?.ToString() ?? "")" disabled />
-                </div>
-                <div class="pc-field">
-                    <label>C.A Mag @YearMinus2 :</label>
-                    <input class="text-input" value="@(CaForYear(YearMinus2)?.ToString() ?? "")" disabled />
+                <div class="pc-field pc-note-perm-field">
+                    <label>Note Permanente</label>
+                    <textarea class="text-input pc-note-perm" disabled="@InterModifClientDisabled"
+                              @oninput="e => Client!.NotePerm = e.Value?.ToString()">@Client.NotePerm</textarea>
                 </div>
             </div>
             <label class="checkbox-label" style="margin-top: 12px;">
@@ -471,25 +494,38 @@ else if (Client is not null)
     }
     </div>
 
-    <div class="pc-actions">
-        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/clients/new")'>Nouveau</button>
-        <button class="btn btn-default" @onclick="Cancel">Annuler</button>
+    @* grid-group-start: the client data-entry form above this action row
+       stays put — only this row + the history grid move/resize together —
+       see RechercheClientPage.razor's own .rc-actions for the same marker
+       and mafaliRowResize in app.js for the mechanism. *@
+    <div class="pc-actions grid-group-start">
+        <button class="btn btn-default" @onclick="Cancel">Annuler modification</button>
         <button class="btn btn-primary" disabled="@(Submitting || Client.Bloque)" @onclick="OpenApplyConfirm">Appliquer</button>
         <button class="btn btn-default" disabled="@(SelectedHistoId is null)" @onclick="DownloadStoredFile">
             Voir le Fichier Stocké
         </button>
-        <button class="btn btn-default" disabled="@Client.Bloque" @onclick="() => BcChoiceOpen = true">
+        <button class="btn btn-default" disabled="@(Client.Bloque || BcGenerating)" @onclick="GenerateBonCommande">
             Générer fichier bon de commande
         </button>
+        @if (PendingBcBytes is not null)
+        {
+            <button class="btn btn-default" @onclick="RedownloadBonCommande">
+                Télécharger à nouveau
+            </button>
+        }
         <button class="btn btn-default" @onclick="Close">Fermer</button>
     </div>
 
     <div class="pc-histo table-wrap">
         <div style="width: 100%; min-width: @(HistoTotalWidth)px;">
-            <div class="header-row" style="position: sticky; top: 0;">
+            <div class="header-row" style="position: sticky; top: 0;" @ref="HistoHeaderRowRef">
                 @foreach (var col in HistoColumns)
                 {
-                    <div class="cell" style="flex: @(HistoCellFlex(col.Key)) @(col.Width)px;">@col.Label</div>
+                    <div class="cell" style="flex: @(HistoCellFlex(col.Key)) @(col.Width)px;">
+                        <span class="col-sort-label @HistoSort.CssClass(col.Key)" @onclick='() => HistoSort.Toggle(col.Key)'>@col.Label @HistoSort.ArrowFor(col.Key)</span>
+                        <ColumnFilterIcon Column="@col.Key" Filter="HistoFilter" OnFilterChanged="StateHasChanged" />
+                        <span class="col-resize-handle" data-col-key="@col.Key"></span>
+                    </div>
                 }
             </div>
             @if (HistoList.Count == 0)
@@ -498,7 +534,7 @@ else if (Client is not null)
             }
             else
             {
-                <Virtualize Items="HistoList" Context="h" ItemSize="34">
+                <Virtualize Items="SortedHistoList" Context="h" ItemSize="34">
                     <div class="row @(h.IdHisto == SelectedHistoId ? "selected" : "")" @onclick="() => SelectedHistoId = h.IdHisto">
                         @foreach (var col in HistoColumns)
                         {
@@ -601,24 +637,6 @@ else if (Client is not null)
     </div>
 }
 
-@if (BcChoiceOpen)
-{
-    <div class="modal-backdrop" @onclick="() => BcChoiceOpen = false">
-        <div class="modal" @onclick:stopPropagation="true">
-            <h3>Bon de Commande</h3>
-            <p class="confirm-text">Quel modèle utiliser ?</p>
-            @if (BcError is not null)
-            {
-                <div class="alert">@BcError</div>
-            }
-            <div class="modal-actions">
-                <button class="btn btn-default" disabled="@BcGenerating" @onclick="() => BcChoiceOpen = false">Annuler</button>
-                <button class="btn btn-primary" disabled="@BcGenerating" @onclick='() => GenerateBonCommande(BonCommandeTemplateType.Optique)'>Optique</button>
-                <button class="btn btn-primary" disabled="@BcGenerating" @onclick='() => GenerateBonCommande(BonCommandeTemplateType.Revendeur)'>Revendeur</button>
-            </div>
-        </div>
-    </div>
-}
 
 @if (BcOpenPromptOpen)
 {
@@ -653,10 +671,22 @@ else if (Client is not null)
 
             <div class="table-wrap" style="max-height: 220px; border: 1px solid var(--border-light); border-radius: 4px; margin-bottom: 12px;">
                 <div class="header-row" style="position: sticky; top: 0;">
-                    <div class="cell" style="flex: 0 0 90px;">Cle Opl</div>
-                    <div class="cell" style="flex: 0 0 90px;">Année</div>
-                    <div class="cell" style="flex: 1;">Chiffre d'Affaire</div>
-                    <div class="cell" style="flex: 0 0 90px;">ID CA</div>
+                    <div class="cell @CaSort.CssClass("cle_opl")" style="flex: 0 0 90px;" @onclick='() => CaSort.Toggle("cle_opl")'>
+                        Cle Opl @CaSort.ArrowFor("cle_opl")
+                        <ColumnFilterIcon Column="cle_opl" Filter="CaFilter" OnFilterChanged="StateHasChanged" />
+                    </div>
+                    <div class="cell @CaSort.CssClass("annee")" style="flex: 0 0 90px;" @onclick='() => CaSort.Toggle("annee")'>
+                        Année @CaSort.ArrowFor("annee")
+                        <ColumnFilterIcon Column="annee" Filter="CaFilter" OnFilterChanged="StateHasChanged" />
+                    </div>
+                    <div class="cell @CaSort.CssClass("ca")" style="flex: 1;" @onclick='() => CaSort.Toggle("ca")'>
+                        Chiffre d'Affaire @CaSort.ArrowFor("ca")
+                        <ColumnFilterIcon Column="ca" Filter="CaFilter" OnFilterChanged="StateHasChanged" />
+                    </div>
+                    <div class="cell @CaSort.CssClass("id_ca")" style="flex: 0 0 90px;" @onclick='() => CaSort.Toggle("id_ca")'>
+                        ID CA @CaSort.ArrowFor("id_ca")
+                        <ColumnFilterIcon Column="id_ca" Filter="CaFilter" OnFilterChanged="StateHasChanged" />
+                    </div>
                 </div>
                 @if (CaList.Count == 0)
                 {
@@ -664,7 +694,7 @@ else if (Client is not null)
                 }
                 else
                 {
-                    @foreach (var ca in CaList)
+                    @foreach (var ca in SortedCaList)
                     {
                         <div class="row @(ca.IdCa == CaSelectedIdCa ? "selected" : "")" @onclick="() => CaSelectedIdCa = ca.IdCa">
                             <div class="cell" style="flex: 0 0 90px;">@ca.CleOpl</div>
@@ -762,7 +792,21 @@ else if (Client is not null)
         "Calandré", "Conditionné", "Facture", "Livré",
     };
 
-    private record ColumnDef(string Key, string Label, int Width);
+    // A class, not a record — Width needs to be mutable for column resize
+    // (records default positional properties to init-only).
+    private class ColumnDef
+    {
+        public string Key { get; }
+        public string Label { get; }
+        public int Width { get; set; }
+
+        public ColumnDef(string key, string label, int width)
+        {
+            Key = key;
+            Label = label;
+            Width = width;
+        }
+    }
 
     // Order from the real Fen_Parcours_Client doc's own numbered
     // Table_Histo column list, columns 1-9 — deliberately dropped the
@@ -771,14 +815,18 @@ else if (Client is not null)
     // read or reference (unlike N° Client), and it already doubles as
     // the row's selection key (SelectedHistoId below) without needing to
     // be a visible column for that.
+    // No N° Client column here — unlike Fichier Historique/Filtres Prédéfinis
+    // (which list history across many clients at once), every row in this
+    // panel already belongs to the one client the whole page is showing;
+    // repeating that same number down every row was pure dead space
+    // (Badr/Bruno: "fields with long width for no reason should stop").
     private readonly List<ColumnDef> HistoColumns = new()
     {
-        new("num_client", "N° Client", 90),
-        new("date_saisie", "Date Saisie", 100),
-        new("heure_saisie", "Heure Saisie", 90),
-        new("assistante_commercial", "Assistante Commerciale", 180),
-        new("date_rappel", "Date Rappel", 100),
-        new("heure_rappel", "Heure Rappel", 90),
+        new("date_saisie", "Date Saisie", 130),
+        new("heure_saisie", "Heure Saisie", 110),
+        new("assistante_commercial", "Assistante Commerciale", 210),
+        new("date_rappel", "Date Rappel", 130),
+        new("heure_rappel", "Heure Rappel", 125),
         new("operation", "Opération", 220),
         new("status_vente", "Status Vente", 140),
         new("note", "Note", 260),
@@ -821,8 +869,25 @@ else if (Client is not null)
     private FranceOptique? Client;
     private ParcoursClientInput? Baseline;
     private List<Ca> CaList = new();
+    private readonly SortState CaSort = new();
+    private readonly GridFilterState CaFilter = new();
+
+    private List<Ca> SortedCaList => GridSort.Apply(GridFilter.Apply(CaList, CaFilter, GetCaSortText), CaSort, GetCaSortText);
+
+    private static string GetCaSortText(Ca ca, string column) => column switch
+    {
+        "cle_opl" => ca.CleOpl.ToString(),
+        "annee" => ca.Annee.ToString(),
+        "ca" => (ca.Ca1?.ToString()) ?? "0",
+        "id_ca" => ca.IdCa.ToString(),
+        _ => "",
+    };
     private List<Historique> HistoList = new();
     private long? SelectedHistoId;
+    private readonly SortState HistoSort = new();
+    private readonly GridFilterState HistoFilter = new();
+
+    private List<Historique> SortedHistoList => GridSort.Apply(GridFilter.Apply(HistoList, HistoFilter, GetHistoCellText), HistoSort, GetHistoCellText);
 
     private List<string> FamilleOptions = new();
     private List<string> FranchiseOptions = new();
@@ -835,6 +900,7 @@ else if (Client is not null)
     private bool ShowProduction;
 
     private bool Loading = true;
+    private bool IsCommercial;
     private bool Submitting;
     private string? Error;
     private string? InfoMessage;
@@ -860,9 +926,7 @@ else if (Client is not null)
     private byte[]? PendingAttachmentBytes;
     private string? PendingAttachmentFileName;
 
-    private bool BcChoiceOpen;
     private bool BcGenerating;
-    private string? BcError;
     private bool BcOpenPromptOpen;
     private string? BcSuccessFolder;
     private byte[]? PendingBcBytes;
@@ -881,12 +945,72 @@ else if (Client is not null)
     private bool CaConflictDialogOpen;
     private List<FieldConflict> CaConflicts = new();
 
+    // Loading (above) only ever flips true→false once, in OnInitializedAsync
+    // — unlike Clients.razor/Filtres Prédéfinis, record navigation
+    // (Suivant/Précédent, LoadCurrent below) updates Client/HistoList
+    // without touching Loading, so the histo grid's header-row DOM node is
+    // never torn down after the initial attach and a one-shot attach here
+    // is safe.
+    private ElementReference HistoHeaderRowRef;
+    private DotNetObjectReference<ParcoursClientPage>? ResizeDotNetRef;
+    private bool ResizeAttached;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!ResizeAttached && !Loading && Client is not null)
+        {
+            ResizeAttached = true;
+            ResizeDotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("mafaliColumnResize.attach", HistoHeaderRowRef, ResizeDotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnColumnResized(string key, int width)
+    {
+        var col = HistoColumns.FirstOrDefault(c => c.Key == key);
+        if (col is null) return;
+        col.Width = width;
+        StateHasChanged();
+    }
+
+    public class ColumnAutoFitData
+    {
+        public string Header { get; set; } = "";
+        public List<string> Values { get; set; } = new();
+    }
+
+    [JSInvokable]
+    public ColumnAutoFitData GetColumnAutoFitData(string key)
+    {
+        var col = HistoColumns.FirstOrDefault(c => c.Key == key);
+        return new ColumnAutoFitData
+        {
+            Header = col?.Label ?? "",
+            Values = HistoList.Select(item => GetHistoCellText(item, key)).ToList(),
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ResizeAttached)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("mafaliColumnResize.detach", HistoHeaderRowRef);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone (e.g. tab closed) — nothing to clean up client-side.
+            }
+        }
+        ResizeDotNetRef?.Dispose();
+    }
+
     private bool BlockedGate => Client?.Bloque ?? false;
     private bool MajDisabled => BlockedGate;
     private bool InterModifClientDisabled => BlockedGate || !InterMajClient;
     private bool StatusDisabled => BlockedGate || (!InterMajClient && Client?.OpEnCours != "Vente en Cours");
-    private int YearMinus1 => DateTime.Today.Year - 1;
-    private int YearMinus2 => DateTime.Today.Year - 2;
 
     private string? CurrentMask => Client?.Pays is not null && PaysByName.TryGetValue(Client.Pays, out var p) ? p.Masque : null;
     private string? CurrentIndicatif => Client?.Pays is not null && PaysByName.TryGetValue(Client.Pays, out var p) ? p.Indicatif : null;
@@ -903,6 +1027,10 @@ else if (Client is not null)
         Loading = true;
         try
         {
+            // Bloqué is a lock on the whole record, not an ordinary editable
+            // field — Commercial can view it but not flip it (2026-09-03
+            // permissions pass). Admin/Assistant unaffected.
+            IsCommercial = await CurrentUser.GetRoleAsync() == "commercial";
             FamilleOptions = await FamilleSvc.ListAsync();
             FranchiseOptions = await FranchiseSvc.ListAsync();
             var paysList = await PaysSvc.ListAsync();
@@ -981,8 +1109,6 @@ else if (Client is not null)
             PreviousStatusVente = null;
             PendingAttachmentBytes = null;
             PendingAttachmentFileName = null;
-            BcChoiceOpen = false;
-            BcError = null;
             BcOpenPromptOpen = false;
             BcSuccessFolder = null;
             PendingBcBytes = null;
@@ -1176,21 +1302,46 @@ else if (Client is not null)
 
     private const string XlsxContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-    private async Task GenerateBonCommande(BonCommandeTemplateType type)
+    // Template is no longer a manual choice (2026-09-04, Badr) — derived
+    // from Type de Famille instead: "Opticien" as the literal first word
+    // (case-insensitive) means Optique, everything else means Revendeur.
+    // Matches every real "Opticien ..." Famille value in the live data
+    // (Opticien FRANCE/Allemagne/Andorre/Belgique/Espagne/Luxembourg/
+    // Maroc/Pays Bas/SUISSE). A client with no Famille set at all can't
+    // be classified either way — blocked with an error rather than
+    // guessing, Badr's explicit call over silently defaulting to Revendeur.
+    private static BonCommandeTemplateType? DetectBcTemplateType(string? famille)
+    {
+        if (string.IsNullOrWhiteSpace(famille)) return null;
+        var firstWord = famille.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        return firstWord.Equals("Opticien", StringComparison.OrdinalIgnoreCase)
+            ? BonCommandeTemplateType.Optique
+            : BonCommandeTemplateType.Revendeur;
+    }
+
+    private async Task GenerateBonCommande()
     {
         if (Client is null) return;
-        BcError = null;
+        Error = null;
+
+        var type = DetectBcTemplateType(Client.Famille);
+        if (type is null)
+        {
+            Error = "Impossible de déterminer le modèle de Bon de Commande : le champ « Type de Famille » n'est pas renseigné pour ce client.";
+            return;
+        }
+
         BcGenerating = true;
         try
         {
-            var templateBytes = await BcTemplateSvc.GetBytesAsync(type);
+            var templateBytes = await BcTemplateSvc.GetBytesAsync(type.Value);
             if (templateBytes is null)
             {
-                BcError = $"Aucun modèle configuré pour « {(type == BonCommandeTemplateType.Optique ? "Optique" : "Revendeur")} ». Contactez un administrateur.";
+                Error = $"Aucun modèle configuré pour « {(type == BonCommandeTemplateType.Optique ? "Optique" : "Revendeur")} ». Contactez un administrateur.";
                 return;
             }
 
-            var filled = await BcTemplateSvc.FillAsync(templateBytes, Client, type);
+            var filled = await BcTemplateSvc.FillAsync(templateBytes, Client, type.Value);
             var fileName = $"BC_{Client.CleOpl}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
 
             var supported = await JS.InvokeAsync<bool>("mafaliBonCommandeDestination.isSupported");
@@ -1203,7 +1354,6 @@ else if (Client is not null)
                 var result = await JS.InvokeAsync<string>("mafaliBonCommandeDestination.writeFile", fileName, streamRef);
                 if (result == "ok")
                 {
-                    BcChoiceOpen = false;
                     PendingBcBytes = filled;
                     PendingBcFileName = fileName;
                     BcSuccessFolder = folderName;
@@ -1221,12 +1371,13 @@ else if (Client is not null)
             {
                 await DownloadBonCommandeBytes(filled, fileName);
                 InfoMessage = "Fichier téléchargé.";
+                PendingBcBytes = filled;
+                PendingBcFileName = fileName;
             }
-            BcChoiceOpen = false;
         }
         catch (Exception ex)
         {
-            BcError = FriendlyError.ToUserMessage(ex);
+            Error = FriendlyError.ToUserMessage(ex);
         }
         finally
         {
@@ -1241,8 +1392,18 @@ else if (Client is not null)
         {
             await DownloadBonCommandeBytes(PendingBcBytes, PendingBcFileName);
         }
-        PendingBcBytes = null;
-        PendingBcFileName = null;
+        // Kept (not cleared to null here) so "Télécharger à nouveau" stays
+        // available afterward — Badr: wants the option to re-download the
+        // same generated file again, matching the legacy app, not just a
+        // one-shot open-it-once prompt.
+    }
+
+    private async Task RedownloadBonCommande()
+    {
+        if (PendingBcBytes is not null && PendingBcFileName is not null)
+        {
+            await DownloadBonCommandeBytes(PendingBcBytes, PendingBcFileName);
+        }
     }
 
     private async Task DownloadBonCommandeBytes(byte[] bytes, string fileName)
@@ -1519,14 +1680,11 @@ else if (Client is not null)
         }
     }
 
-    private int? CaForYear(int year) => CaList.FirstOrDefault(c => c.Annee == year)?.Ca1;
-
     private static DateOnly? ParseDate(string? s) => DateOnly.TryParse(s, out var v) ? v : null;
     private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var v) ? v : null;
 
     private static string GetHistoCellText(Historique h, string key) => key switch
     {
-        "num_client" => h.NumClient.ToString(),
         "date_saisie" => h.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
         "heure_saisie" => h.HeureSaisie?.ToString("HH:mm") ?? "",
         "assistante_commercial" => h.AssistanteCommercial ?? "",

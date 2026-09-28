@@ -88,30 +88,34 @@ public class BonCommandeTemplateService
 
     // Shared by Coordonnées client (B12), Adresse de Facturation (F12), and
     // Adresse de Livraison (F19) — confirmed with Badr they're all the same
-    // underlying address, not three different inputs. Localisation 1 is
-    // only appended when it's actually set, not as a blank trailing line —
-    // same rule in all three places.
+    // underlying address, not three different inputs. Order is Raison
+    // Sociale, Rue, Localisation 1, CP+Ville (2026-09-04 — was CP+Ville
+    // then Localisation 1 before; Badr wants Localisation 1 ahead of the
+    // postal line). Localisation 1 is only inserted when it's actually
+    // set, not as a blank line — same rule as before, just moved earlier
+    // in the list.
     private static List<string> BuildAddressLines(FranceOptique client)
     {
         var lines = new List<string>
         {
             client.RaisonSociale ?? "",
             client.Rue ?? "",
-            $"{client.Cp} {client.Ville}".Trim(),
         };
         if (!string.IsNullOrWhiteSpace(client.Localisation1))
         {
             lines.Add(client.Localisation1);
         }
+        lines.Add($"{client.Cp} {client.Ville}".Trim());
         return lines;
     }
 
     // Layout confirmed cell-by-cell against the real templates Badr sent
     // (BC A COMPLETER.xlsx — the one with the 11 yellow fill-in cells,
     // despite its name suggesting otherwise; MODELE BC OPTIQUE 2026.xlsx is
-    // the clean/blank copy with the same layout). Cells not covered here
-    // (C22 "Contact", L6) are deliberately left untouched — Badr hasn't
-    // decided their content yet. The big title (merged C1:L4) used to get
+    // the clean/blank copy with the same layout). C22 "Contact" was left
+    // blank originally (Badr hadn't decided its content yet) — resolved
+    // 2026-09-04: Contact = Responsable Achats. L6 remains deliberately
+    // untouched, still undecided. The big title (merged C1:L4) used to get
     // the franchise too — Badr moved that to E6 instead and said the title
     // itself "should stay like that", so C1 is no longer touched at all.
     public async Task<byte[]> FillAsync(byte[] templateBytes, FranceOptique client, BonCommandeTemplateType type)
@@ -168,6 +172,7 @@ public class BonCommandeTemplateService
         // Adresse de Livraison (merged F19:L24) — same address, no TVA line.
         sheet.Cell("F19").Value = string.Join("\n", BuildAddressLines(client));
 
+        sheet.Cell("C22").Value = client.ResponsableAchat ?? "";
         sheet.Cell("C23").Value = client.Telephone ?? "";
         sheet.Cell("C24").Value = client.Email ?? "";
 
@@ -178,8 +183,6 @@ public class BonCommandeTemplateService
         // rightward on its own (confirmed against the real template before
         // relying on it) — the only real gap was the cramped left edge, so
         // a small indent is the actual fix, not a wrap/column-width change.
-        // Applied to C22 too even though its value isn't set yet, so it's
-        // ready the moment Badr specifies Contact's content.
         foreach (var coord in new[] { "C22", "C23", "C24" })
         {
             sheet.Cell(coord).Style.Alignment.Indent = 1;
@@ -188,12 +191,13 @@ public class BonCommandeTemplateService
 
     // Layout confirmed cell-by-cell against MODELE BC REVENDEUR 2026.xlsx.
     // Different grid from Optique (no Franchise/TVA cells on this
-    // template at all) but same rules Badr confirmed apply here too:
-    // fields with no FranceOptique equivalent (Identifiant "Nouveau
+    // template at all) but same rules Badr confirmed apply here too.
+    // Contact (C25) resolved 2026-09-04, same as Optique's C22 — Responsable
+    // Achats. Fields with no FranceOptique equivalent (Identifiant "Nouveau
     // client" I7, "Date de Validation" F11, "Date de Départ Usine" I11,
-    // "E-mail Facturation" C28, Contact C25) and the PRODUITS COMMANDES /
-    // print-production sections (rows 29-102) are left untouched — same
-    // "not decided yet, don't guess" treatment as C22/L6 on Optique.
+    // "E-mail Facturation" C28) and the PRODUITS COMMANDES / print-production
+    // sections (rows 29-102) are still left untouched — same "not decided
+    // yet, don't guess" treatment as Optique's L6.
     private static void FillRevendeur(IXLWorksheet sheet, FranceOptique client, long bcNumber)
     {
         sheet.Cell("H7").Value = client.CleOpl;
@@ -214,12 +218,11 @@ public class BonCommandeTemplateService
         // Adresse de Livraison (merged F22:L28) — same address.
         sheet.Cell("F22").Value = string.Join("\n", BuildAddressLines(client));
 
+        sheet.Cell("C25").Value = client.ResponsableAchat ?? "";
         sheet.Cell("C26").Value = client.Telephone ?? "";
         sheet.Cell("C27").Value = client.Email ?? "";
 
-        // Same "not stuck to the edges" indent fix as Optique's C22-C24;
-        // C25 (Contact) included even though it isn't filled yet, same
-        // reasoning as Optique's C22.
+        // Same "not stuck to the edges" indent fix as Optique's C22-C24.
         foreach (var coord in new[] { "C25", "C26", "C27" })
         {
             sheet.Cell(coord).Style.Alignment.Indent = 1;

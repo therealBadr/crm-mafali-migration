@@ -5,7 +5,7 @@
       "name": "webapp",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "webapp", "--launch-profile", "http"],
-      "port": 5297
+      "autoPort": true
     }
   ]
 }

@@ -175,13 +175,28 @@
     {
         <div class="table-wrap">
             <div class="header-row">
-                <div class="cell">Login</div>
-                <div class="cell" style="flex: 0 0 140px;">Rôle</div>
-                <div class="cell" style="flex: 0 0 120px;">Statut</div>
-                <div class="cell" style="flex: 0 0 140px;">Mot de passe</div>
-                <div class="cell" style="flex: 0 0 160px;">Dernière connexion</div>
+                <div class="cell @UserSort.CssClass("login")" @onclick='() => UserSort.Toggle("login")'>
+                    Login @UserSort.ArrowFor("login")
+                    <ColumnFilterIcon Column="login" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                </div>
+                <div class="cell @UserSort.CssClass("role")" style="flex: 0 0 140px;" @onclick='() => UserSort.Toggle("role")'>
+                    Rôle @UserSort.ArrowFor("role")
+                    <ColumnFilterIcon Column="role" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                </div>
+                <div class="cell @UserSort.CssClass("statut")" style="flex: 0 0 120px;" @onclick='() => UserSort.Toggle("statut")'>
+                    Statut @UserSort.ArrowFor("statut")
+                    <ColumnFilterIcon Column="statut" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                </div>
+                <div class="cell @UserSort.CssClass("mdp")" style="flex: 0 0 140px;" @onclick='() => UserSort.Toggle("mdp")'>
+                    Mot de passe @UserSort.ArrowFor("mdp")
+                    <ColumnFilterIcon Column="mdp" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                </div>
+                <div class="cell @UserSort.CssClass("derniere")" style="flex: 0 0 160px;" @onclick='() => UserSort.Toggle("derniere")'>
+                    Dernière connexion @UserSort.ArrowFor("derniere")
+                    <ColumnFilterIcon Column="derniere" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                </div>
             </div>
-            @foreach (var u in UserItems)
+            @foreach (var u in SortedUsers)
             {
                 <div class="row @(u.Login == SelectedUser ? "selected" : "")" @onclick="() => SelectedUser = u.Login">
                     <div class="cell">@u.Login</div>
@@ -275,6 +290,12 @@
     private bool IsAdmin;
     private string ActiveTab = "profil";
 
+    // Lets Home.razor land an admin directly on Aperçu after login
+    // ("/mon-compte?tab=apercu") instead of always defaulting to Mon Profil.
+    [SupplyParameterFromQuery(Name = "tab")]
+    [Parameter]
+    public string? Tab { get; set; }
+
     // ---- Admin overview stats ----
     private int ClientCount;
     private int DueRappelCount;
@@ -287,6 +308,10 @@
         Login = await CurrentUser.GetLoginAsync();
         Role = await CurrentUser.GetRoleAsync();
         IsAdmin = await CurrentUser.IsAdminAsync();
+        if (IsAdmin && Tab is "apercu" or "users")
+        {
+            ActiveTab = Tab;
+        }
         if (IsAdmin)
         {
             await LoadUsers();
@@ -350,6 +375,20 @@
     private bool UsersLoading = true;
     private string? UsersError;
     private bool UsersSubmitting;
+    private readonly SortState UserSort = new();
+    private readonly GridFilterState UserFilter = new();
+
+    private List<User> SortedUsers => GridSort.Apply(GridFilter.Apply(UserItems, UserFilter, GetUserSortText), UserSort, GetUserSortText);
+
+    private static string GetUserSortText(User u, string column) => column switch
+    {
+        "login" => u.Login ?? "",
+        "role" => RoleLabel(u.Role),
+        "statut" => u.IsActive ? "Actif" : "Inactif",
+        "mdp" => string.IsNullOrEmpty(u.PasswordHash) ? "Non défini" : "Défini",
+        "derniere" => u.LastLoginAt?.ToString("dd/MM/yyyy HH:mm") ?? "",
+        _ => "",
+    };
 
     private List<string> DriftAssistantesWithoutLogin = new();
     private List<string> DriftLoginsWithoutProfile = new();

@@ -1,0 +1,247 @@
+@page "/fichier-filtres-historique"
+@attribute [Authorize(Roles = "admin,assistant")]
+@inject FiltreHistoriqueService FiltreSvc
+@inject AssistanteService AssistanteSvc
+@inject CurrentUserService CurrentUser
+
+@* Historique's half of Fen_Fichier_Filtre — mirrors FichierFiltresPage.razor
+   (Client's half) exactly, just against filtre_historique/FiltreHistoriqueService.
+   See that page for the detailed reasoning; not repeated here. *@
+
+<PageTitle>Fichier des Filtres Historique</PageTitle>
+
+<div class="page page-flush">
+<div class="toolbar">
+    <span class="title">Table des Filtres Historique par Opérateur</span>
+    <div class="actions">
+        @if (CanCreate)
+        {
+            <button class="btn btn-primary" @onclick="OpenCreate">Nouveau</button>
+        }
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
+        <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenDeleteConfirm">Supprimer</button>
+    </div>
+</div>
+
+<div class="search-bar">
+    <select class="search-input" style="min-width: 160px;" value="@SearchColumn" @onchange="OnSearchColumnChange">
+        <option value="operateur">Opérateur</option>
+        <option value="filtre">Nom du Filtre</option>
+        <option value="reel">Filtre Réel</option>
+    </select>
+    <input class="search-input" type="text" placeholder="Rechercher…" value="@SearchTerm" @oninput="OnSearchInput" />
+    @if (!string.IsNullOrWhiteSpace(SearchTerm))
+    {
+        <span class="result-count">@Filtered.Count / @Items.Count résultats</span>
+    }
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="table-wrap">
+        <div class="header-row">
+            <div class="cell @Sort.CssClass("operateur")" style="flex: 0 0 180px;" @onclick='() => Sort.Toggle("operateur")'>
+                Opérateur @Sort.ArrowFor("operateur")
+                <ColumnFilterIcon Column="operateur" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("filtre")" style="flex: 0 0 220px;" @onclick='() => Sort.Toggle("filtre")'>
+                Nom du Filtre @Sort.ArrowFor("filtre")
+                <ColumnFilterIcon Column="filtre" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("reel")" @onclick='() => Sort.Toggle("reel")'>
+                Filtre Réel @Sort.ArrowFor("reel")
+                <ColumnFilterIcon Column="reel" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+        </div>
+        @foreach (var f in Filtered)
+        {
+            var key = RowKey(f);
+            <div class="row @(key == Selected ? "selected" : "")" @onclick="() => Select(key)" @ondblclick="() => OpenEditRow(f)">
+                <div class="cell" style="flex: 0 0 180px;">@f.NomOperateur</div>
+                <div class="cell" style="flex: 0 0 220px;">@f.NomFiltre</div>
+                <div class="cell">@f.FiltreReel</div>
+            </div>
+        }
+    </div>
+    <p class="count">@Items.Count enregistrements</p>
+}
+</div>
+
+@if (ConfirmDeleteOpen)
+{
+    <div class="modal-backdrop" @onclick="() => ConfirmDeleteOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Confirmer la suppression</h3>
+            <p class="confirm-text">Êtes-vous sûr de vouloir supprimer ce filtre ?</p>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="() => ConfirmDeleteOpen = false">Annuler</button>
+                <button class="btn btn-primary" @onclick="ConfirmDelete">Supprimer</button>
+            </div>
+        </div>
+    </div>
+}
+
+<FiltreDetailModal Opened="ModalOpen" OnClose="() => ModalOpen = false" Assistantes="Assistantes"
+                    Mode="standalone" Target="historique" InitialNomOperateur="@EditingNomOperateur" InitialNomFiltre="@EditingNomFiltre"
+                    InitialFiltreReel="@EditingFiltreReel" OriginalKey="EditingKey" OnSaved="Load" />
+
+@code {
+    private List<FiltreHistorique> Items = new();
+    private string? Selected;
+    private string SearchColumn = "operateur";
+    private string SearchTerm = string.Empty;
+    private bool Loading = true;
+    private string? Error;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
+
+    private List<string> Assistantes = new();
+    private bool ModalOpen;
+    private string? EditingNomOperateur;
+    private string? EditingNomFiltre;
+    private string? EditingFiltreReel;
+    private (string NomOperateur, string NomFiltre)? EditingKey;
+
+    private bool ConfirmDeleteOpen;
+
+    private bool CanViewAll;
+    private bool CanCreate;
+    private string? CurrentLogin;
+
+    private static string RowKey(FiltreHistorique f) => $"{f.NomOperateur} {f.NomFiltre}";
+
+    private List<FiltreHistorique> Filtered
+    {
+        get
+        {
+            var list = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Items
+                : Items.Where(f => (SearchColumn switch
+                {
+                    "filtre" => f.NomFiltre,
+                    "reel" => f.FiltreReel ?? "",
+                    _ => f.NomOperateur,
+                }).Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            list = GridFilter.Apply(list, Filter, GetSortText);
+            return GridSort.Apply(list, Sort, GetSortText);
+        }
+    }
+
+    private static string GetSortText(FiltreHistorique f, string column) => column switch
+    {
+        "operateur" => f.NomOperateur ?? "",
+        "filtre" => f.NomFiltre ?? "",
+        "reel" => f.FiltreReel ?? "",
+        _ => "",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        CanViewAll = await CurrentUser.CanViewAllFiltersAsync();
+        CanCreate = await CurrentUser.CanCreateFiltersAsync();
+        CurrentLogin = await CurrentUser.GetLoginAsync();
+
+        try
+        {
+            Assistantes = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        Loading = true;
+        Selected = null;
+        try
+        {
+            Items = CanViewAll
+                ? await FiltreSvc.ListAsync()
+                : await FiltreSvc.ListByOperatorAsync(CurrentLogin ?? "");
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        SearchTerm = e.Value?.ToString() ?? string.Empty;
+        Selected = null;
+    }
+
+    private void OnSearchColumnChange(ChangeEventArgs e)
+    {
+        SearchColumn = e.Value?.ToString() ?? "operateur";
+        Selected = null;
+    }
+
+    private void Select(string key) => Selected = key;
+
+    private void OpenCreate()
+    {
+        EditingNomOperateur = null;
+        EditingNomFiltre = null;
+        EditingFiltreReel = null;
+        EditingKey = null;
+        ModalOpen = true;
+    }
+
+    private void OpenEditRow(FiltreHistorique f)
+    {
+        EditingNomOperateur = f.NomOperateur;
+        EditingNomFiltre = f.NomFiltre;
+        EditingFiltreReel = f.FiltreReel;
+        EditingKey = (f.NomOperateur, f.NomFiltre);
+        ModalOpen = true;
+    }
+
+    private void OpenEdit()
+    {
+        var current = Items.FirstOrDefault(f => RowKey(f) == Selected);
+        if (current is null) return;
+        OpenEditRow(current);
+    }
+
+    private void OpenDeleteConfirm()
+    {
+        if (Selected is null) return;
+        ConfirmDeleteOpen = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        ConfirmDeleteOpen = false;
+        var current = Items.FirstOrDefault(f => RowKey(f) == Selected);
+        if (current is null) return;
+
+        Error = null;
+        try
+        {
+            await FiltreSvc.DeleteAsync(current.NomOperateur, current.NomFiltre);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+}

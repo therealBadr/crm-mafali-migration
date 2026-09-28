@@ -1,9 +1,10 @@
 @page "/assistantes"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject AssistanteService AssistanteSvc
 
 <PageTitle>Assistantes</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Table des Assistantes</span>
     <div class="actions">
@@ -34,10 +35,22 @@ else
 {
     <div class="table-wrap">
         <div class="header-row">
-            <div class="cell">Prénom Nom</div>
-            <div class="cell">Service</div>
-            <div class="cell" style="flex: 0 0 160px;">Accès à tous les Filtres</div>
-            <div class="cell">Commentaire</div>
+            <div class="cell @Sort.CssClass("nom")" @onclick='() => Sort.Toggle("nom")'>
+                Prénom Nom @Sort.ArrowFor("nom")
+                <ColumnFilterIcon Column="nom" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("service")" @onclick='() => Sort.Toggle("service")'>
+                Service @Sort.ArrowFor("service")
+                <ColumnFilterIcon Column="service" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("acces")" style="flex: 0 0 160px;" @onclick='() => Sort.Toggle("acces")'>
+                Accès à tous les Filtres @Sort.ArrowFor("acces")
+                <ColumnFilterIcon Column="acces" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("commentaire")" @onclick='() => Sort.Toggle("commentaire")'>
+                Commentaire @Sort.ArrowFor("commentaire")
+                <ColumnFilterIcon Column="commentaire" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
         </div>
         @foreach (var a in Filtered)
         {
@@ -131,6 +144,8 @@ else
     private string SearchTerm = string.Empty;
     private bool Loading = true;
     private string? Error;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
 
     private bool ModalOpen;
     private bool IsEditMode;
@@ -145,14 +160,35 @@ else
     private bool ConflictDialogOpen;
     private List<FieldConflict> Conflicts = new();
 
-    private List<Assistante> Filtered =>
-        string.IsNullOrWhiteSpace(SearchTerm)
-            ? Items
-            : Items.Where(a =>
-                a.PrenomNom.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
-                (a.Service ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
-                (a.Commentaire ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase))
-              .ToList();
+    private List<Assistante> Filtered
+    {
+        get
+        {
+            var list = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Items
+                : Items.Where(a =>
+                    a.PrenomNom.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (a.Service ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (a.Commentaire ?? "").Contains(SearchTerm, StringComparison.OrdinalIgnoreCase))
+                  .ToList();
+            list = GridFilter.Apply(list, Filter, GetSortText);
+            return GridSort.Apply(list, Sort, GetSortText);
+        }
+    }
+
+    private static string GetSortText(Assistante a, string column) => column switch
+    {
+        "nom" => a.PrenomNom ?? "",
+        "service" => a.Service ?? "",
+        // "1"/"0" sorted fine but never matched a search for "Oui"/"Non" —
+        // GridFilter.Apply's contract is to match exactly what's rendered
+        // (see GridFilter.cs), and the badge in the row renders Oui/Non,
+        // not 1/0. Confirmed live: searching "Non" on this column returned
+        // zero rows despite several existing (Badr, 2026-09-22).
+        "acces" => a.AllFiltres ? "Oui" : "Non",
+        "commentaire" => a.Commentaire ?? "",
+        _ => "",
+    };
 
     protected override async Task OnInitializedAsync() => await Load();
 

@@ -47,4 +47,24 @@ To ask Olivier:
 
 To-do:
 	- Bon de commande
-	- When typing a value then rechercher i get a client 
+	- When typing a value then rechercher i get a client
+
+===
+
+- Permissions:
+	- Commercial has access to only Filtres Predefinis, Rechercher un client, Parcours Client, Rappels, Bon de Commande (to choose source of template of both files)
+	- Commercial cannot choose if a client is bloque or not
+
+
+Etat Client:
+	- Remove "non defini", by default it will be "Prospect" until change to "Client"
+
+- Generer un fichier bon de commande:
+	- Don't give a choice for either "Optique" or "Revendeur", you will know which template will be choosen and used from the "Type de Famille" field. If it has the word "Opticien" in the beginning as a first word then we choosing Optique, otherwise Revendeur template.
+	- The order of the info in the boxes:
+		Raison sociale
+		Adresse/Rue
+		localisation 1
+		CP Ville
+	
+	Contact field will be filled with "Responsable Achats"

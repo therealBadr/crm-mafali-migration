@@ -1,4 +1,5 @@
 @page "/clients"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject ClientService ClientSvc
 @inject ClientImportExportService ImportExportSvc
 @inject CurrentUserService CurrentUserSvc
@@ -8,7 +9,7 @@
 
 <PageTitle>Clients</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Table des Clients</span>
     <div class="actions">
@@ -16,7 +17,7 @@
         <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenEdit">Modifier</button>
         <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="OpenDeleteConfirm">Supprimer</button>
         <button class="btn btn-outline" disabled="@(Selected is null)" @onclick="() => OpenParcours(Selected)">Parcours Client</button>
-        <button class="btn btn-outline" disabled="@ExportingOrImporting" @onclick="Export">Exporter</button>
+        <button class="btn btn-outline" disabled="@ExportingOrImporting" @onclick="Export">@(ExportingOrImporting ? "Export en cours…" : "Exporter")</button>
         @if (IsAdmin)
         {
             <label class="btn btn-outline" for="import-file-input"
@@ -57,7 +58,8 @@ else
                 @foreach (var col in Columns)
                 {
                     <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
-                        @col.Label
+                        <span class="col-sort-label @Sort.CssClass(col.Key)" @onclick='() => Sort.Toggle(col.Key)'>@col.Label @Sort.ArrowFor(col.Key)</span>
+                        <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
                         <span class="col-resize-handle" data-col-key="@col.Key"></span>
                     </div>
                 }
@@ -198,11 +200,20 @@ else
     private bool ImportResultOpen;
     private ImportResult? ImportSummary;
     private bool IsAdmin;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
 
-    private List<FranceOptique> Filtered =>
-        string.IsNullOrWhiteSpace(SearchTerm)
-            ? Items
-            : Items.Where(c => GetCellText(c, SearchColumn).Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+    private List<FranceOptique> Filtered
+    {
+        get
+        {
+            var list = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Items
+                : Items.Where(c => GetCellText(c, SearchColumn).Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            list = GridFilter.Apply(list, Filter, GetCellText);
+            return GridSort.Apply(list, Sort, GetCellText);
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -278,6 +289,13 @@ else
 
     private async Task Load()
     {
+        // Loading gates the @if that mounts the header-row element (see
+        // markup above) — flipping it true then false (as every call here
+        // from ConfirmDelete/HandleImportFile does, not just the initial
+        // OnInitializedAsync call) tears down and rebuilds that DOM node,
+        // so the resize listeners attached to the old one need to be
+        // re-attached to the new one next render.
+        ResizeAttached = false;
         Loading = true;
         Selected = null;
         try
@@ -366,9 +384,33 @@ else
     {
         ExportingOrImporting = true;
         Error = null;
+        // StateHasChanged + Task.Yield here, not just the automatic
+        // post-handler render Blazor would otherwise do — ImportExportSvc.
+        // Export() below is entirely synchronous (no await inside it), so
+        // without yielding first, the "disabled / Export en cours…" render
+        // never actually reaches the browser until AFTER that call already
+        // returns. Confirmed live: at 93,235 rows the export takes ~39s,
+        // and without this the button visibly stayed enabled and unchanged
+        // in the browser for the entire 39s (the pending render was stuck
+        // behind the blocking call, not lost — just never flushed in time
+        // to be seen) — indistinguishable from the page being frozen.
+        StateHasChanged();
+        await Task.Yield();
         try
         {
-            var bytes = ImportExportSvc.Export(Filtered);
+            // Task.Run, not a direct call — the Yield above only gets the
+            // *initial* "busy" render out the door; ImportExportSvc.Export
+            // is still ~30-40s of synchronous CPU-bound work at 93,235
+            // rows, and running that directly on the circuit's own thread
+            // blocks it from processing SignalR's keepalive for the whole
+            // duration. Confirmed live: that alone was enough to trip a
+            // "WebSocket closed (1006)" disconnect mid-export, abandoning
+            // the download entirely — silently, no error shown, the user
+            // just lands back wherever reconnection happens to put them.
+            // Offloading to the thread pool keeps the circuit's own thread
+            // free to answer keepalives while the real work happens
+            // elsewhere.
+            var bytes = await Task.Run(() => ImportExportSvc.Export(Filtered));
             using var stream = new MemoryStream(bytes);
             using var streamRef = new DotNetStreamReference(stream);
             var fileName = $"clients_{DateTime.Now:yyyy-MM-dd}.xlsx";
@@ -461,12 +503,10 @@ else
         "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
         "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
         "note_perm" => c.NotePerm ?? "",
-        "etat_client" => c.EtatClient switch
-        {
-            "1" => "Client",
-            "2" => "Prospect",
-            _ => "Non défini",
-        },
+        // No "Non défini" bucket anymore (2026-09-04) — anything that isn't
+        // literally "1" reads as Prospect, including legacy junk ("0"/
+        // blank/"-1"/typos) that was never explicitly set to Client.
+        "etat_client" => c.EtatClient == "1" ? "Client" : "Prospect",
         _ => "",
     };
 

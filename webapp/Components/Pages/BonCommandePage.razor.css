@@ -54,3 +54,84 @@
     font-weight: 600;
     color: var(--navy);
 }
+
+/* "Command Strip Workbench" — presentation only, scoped to this page. */
+
+.page {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 1px solid var(--color-workbench-border);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.toolbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.toolbar .title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.bc-card {
+    background: var(--color-paper);
+    border: 1px solid var(--color-workbench-border);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+}
+
+.bc-section-title {
+    font-family: var(--font-sans-workbench);
+    color: var(--color-muted-foreground);
+}
+
+.bc-template-row {
+    border-top-color: var(--color-workbench-border);
+}
+
+.bc-template-label {
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.btn-outline {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-outline:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+}
+
+.btn-default {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-default:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}

@@ -1,10 +1,11 @@
 @page "/pays"
+@attribute [Authorize(Roles = "admin,assistant")]
 @using PaysModel = MafaliCrm.Web.Models.Pays
 @inject PaysService PaysSvc
 
 <PageTitle>Pays</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Liste Pays</span>
     <div class="actions">
@@ -35,10 +36,22 @@ else
 {
     <div class="table-wrap">
         <div class="header-row">
-            <div class="cell" style="flex: 0 0 70px;">Identifiant</div>
-            <div class="cell">Nom Pays</div>
-            <div class="cell">Indicatif</div>
-            <div class="cell">Masque N° Téléphone</div>
+            <div class="cell @Sort.CssClass("id")" style="flex: 0 0 70px;" @onclick='() => Sort.Toggle("id")'>
+                Identifiant @Sort.ArrowFor("id")
+                <ColumnFilterIcon Column="id" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("nom")" @onclick='() => Sort.Toggle("nom")'>
+                Nom Pays @Sort.ArrowFor("nom")
+                <ColumnFilterIcon Column="nom" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("indicatif")" @onclick='() => Sort.Toggle("indicatif")'>
+                Indicatif @Sort.ArrowFor("indicatif")
+                <ColumnFilterIcon Column="indicatif" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("masque")" @onclick='() => Sort.Toggle("masque")'>
+                Masque N° Téléphone @Sort.ArrowFor("masque")
+                <ColumnFilterIcon Column="masque" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
         </div>
         @foreach (var p in Filtered)
         {
@@ -126,6 +139,8 @@ else
     private string SearchTerm = string.Empty;
     private bool Loading = true;
     private string? Error;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
 
     private bool ModalOpen;
     private bool IsEditMode;
@@ -139,10 +154,26 @@ else
     private bool ConflictDialogOpen;
     private List<FieldConflict> Conflicts = new();
 
-    private List<PaysModel> Filtered =>
-        string.IsNullOrWhiteSpace(SearchTerm)
-            ? Items
-            : Items.Where(p => p.NomPays.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+    private List<PaysModel> Filtered
+    {
+        get
+        {
+            var list = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Items
+                : Items.Where(p => p.NomPays.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            list = GridFilter.Apply(list, Filter, GetSortText);
+            return GridSort.Apply(list, Sort, GetSortText);
+        }
+    }
+
+    private static string GetSortText(PaysModel p, string column) => column switch
+    {
+        "id" => p.IdPays.ToString(),
+        "nom" => p.NomPays ?? "",
+        "indicatif" => p.Indicatif ?? "",
+        "masque" => p.Masque ?? "",
+        _ => "",
+    };
 
     protected override async Task OnInitializedAsync() => await Load();
 

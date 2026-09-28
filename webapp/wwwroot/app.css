@@ -117,6 +117,31 @@
     --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.18), 0 4px 12px rgba(15, 23, 42, 0.08);
 
     --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    /* "Command Strip Workbench" redesign tokens (2026-09-15, Badr's brief).
+       Additive, not a rename of the tokens above — this is a page-by-page
+       rollout ("show me the client list first"), so the existing
+       navy/cyan tokens above stay exactly as they are for every screen
+       not yet redesigned. Only MainLayout (shared header, so every page
+       sees it) and the screens actually redone this pass reference these.
+       Values match the brief exactly, including its approximate hex notes
+       for the "-strong"/"-soft" tint pairs. */
+    --color-ink: #172033;
+    --color-ink-soft: #E8E8EE;
+    --color-paper: #F7F7F2;
+    --color-surface: #FCFCFA;
+    --color-coral: #FF5B5F;
+    --color-coral-soft: #FDEBEB;
+    --color-coral-soft-strong: #F8D7D8;
+    --color-teal-2: #37B8A6;
+    --color-teal-2-strong: #2E8A7D;
+    --color-teal-2-soft: #E9F4F1;
+    --color-workbench-border: #DDDCCF;
+    --color-muted-foreground: #6B7080;
+    --color-ink-scrim: rgba(23, 32, 51, 0.34);
+
+    --font-display: "Libre Baskerville", Georgia, serif;
+    --font-sans-workbench: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 html, body {
@@ -414,12 +439,76 @@ h1:focus {
     box-shadow: var(--shadow-md);
 }
 
+/* Opts a page's own root card OUT of .app-body's shared space-5 inset
+   (MainLayout.razor.css) — edge-to-edge instead of sitting inside that
+   margin, no rounded corners/shadow floating it off the canvas. Add this
+   class alongside a page's own root class (.page, or a page-specific one
+   like .rc-page/.pc-page) instead of reimplementing the same negative-
+   margin math — and re-litigating the same "why is .app-body's padding
+   still showing up here" question — in that page's own scoped CSS every
+   time a screen needs this. First user: Recherche Client, at Badr's
+   explicit request to break from the shared card look there; anything
+   else that wants the same edge-to-edge treatment adds this one class,
+   nothing more. Deliberately just the margin — whether the page ALSO
+   fills the full reclaimed height or sizes to its own content is a
+   per-page content decision, not part of this utility. */
+.page-flush {
+    margin: calc(-1 * var(--space-5));
+}
+
 .table-wrap {
     flex: 1;
     min-height: 0;
     overflow: auto;
     display: flex;
     flex-direction: column;
+    /* No background of its own before this — harmless while in normal
+       flow (whatever's behind it, .page, is already white), but once
+       mafaliRowResize floats it via `position: fixed` to expand upward
+       (app.js), any part of its own box with no row content (a "0
+       enregistrements" grid, or just the gap below the last row) was
+       fully transparent, letting the covered search form bleed straight
+       through it — confirmed live on Recherche Client with an empty
+       result set. An explicit opaque background makes it a real solid
+       surface regardless of row count or position scheme. */
+    background: #ffffff;
+}
+
+/* Draggable divider on a grid's top border, letting the grid grow taller
+   by expanding UPWARD as an overlay on top of whatever's above it —
+   app.js's mafaliRowResize inserts one of these (plus a matching
+   .table-wrap-placeholder, see below) as siblings right before every
+   .table-wrap automatically (no per-page markup). Two earlier attempts
+   replaced: native `resize: vertical` (tiny, easy-to-miss corner target,
+   and no visible handle at all on a grid that starts at zero height) —
+   then a version that grew the grid in-flow, which turned out to be
+   impossible to do correctly: every page fills the screen exactly with
+   `overflow: hidden`, so a grid already claims 100% of the leftover
+   space by default — there's no in-flow headroom above it to grow into,
+   confirmed live (Badr, 2026-09-21: dragging up "did nothing", only
+   dragging down worked, backwards from what was wanted). Growing now
+   means the grid leaves normal flow (`position: fixed`) and floats over
+   the content above it instead — see mafaliRowResize's own comment for
+   the full mechanism. */
+.table-wrap-resize-handle {
+    flex: 0 0 8px;
+    height: 8px;
+    margin: -4px 0;
+    cursor: ns-resize;
+    position: relative;
+    z-index: 3;
+}
+
+/* Invisible flex spacer, same width/position the grid itself would occupy
+   in normal flow — only shown (via inline `display` toggled by
+   mafaliRowResize) while the real grid has left flow to float as an
+   expanded overlay, so it keeps reserving that grid's normal share of the
+   page and nothing below the grid shifts up to fill the "gap" left
+   behind. */
+.table-wrap-placeholder {
+    display: none;
+    flex: 1 1 0%;
+    min-height: 0;
 }
 
 .header-row {
@@ -439,6 +528,37 @@ h1:focus {
     letter-spacing: 0.04em;
     color: var(--navy);
     border-right: 1px solid var(--header-border);
+    /* Deliberately keeps the base .cell rule's overflow: hidden (needed for
+       header-text ellipsis truncation, and for the automatic flex min-width
+       to stay 0 so header columns keep lining up with data columns below).
+       ColumnFilterIcon's open input (.col-filter-inline) is an inset: 0
+       overlay that never exceeds this box, so it never gets clipped by
+       this rule in the first place — see the comment at the top of
+       ColumnFilterIcon.razor for the two earlier attempts that did leak
+       outside the box and had to fight this overflow rule for it. */
+}
+
+/* Click-to-sort headers (GridSort.cs). On grids with resizable columns the
+   .sortable/.sorted classes land on an inner .col-sort-label span wrapping
+   just the label text, not the whole .cell — that keeps a resize drag that
+   releases elsewhere in the header row from landing on a neighboring
+   column's sort click, since the click event only bubbles from where the
+   mouseup actually happened. Simpler grids with no resize handle put the
+   same classes directly on the .cell instead — both are styled the same. */
+.header-row .cell.sortable,
+.header-row .col-sort-label.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.header-row .cell.sortable:hover,
+.header-row .col-sort-label.sortable:hover {
+    color: var(--teal);
+}
+
+.header-row .cell.sorted,
+.header-row .col-sort-label.sorted {
+    color: var(--teal);
 }
 
 /* Sits on top of the 1px border-right above, not beside it — centering a
@@ -465,6 +585,63 @@ h1:focus {
     background: var(--teal);
     z-index: 2000;
     pointer-events: none;
+}
+
+/* Per-column header search (GridFilter.cs). The icon sits inline right
+   after the sort label/arrow, same flow as the rest of the header text —
+   simplest possible placement, no absolute-positioning fight with
+   .col-resize-handle sitting on the border. */
+.col-filter-icon {
+    display: inline-block;
+    margin-left: 6px;
+    cursor: pointer;
+    opacity: 0.5;
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.col-filter-icon:hover {
+    opacity: 0.85;
+}
+
+.col-filter-icon.filtered {
+    opacity: 1;
+    color: var(--teal);
+}
+
+/* Fills the parent .cell exactly (inset: 0 — the cell has
+   position: relative already) instead of dropping a popover below it.
+   Column widths are user-resizable and often narrow, so this can be a
+   tight box on a narrow column, but it never exceeds the cell's own
+   footprint — no overflow fight with the cell's own overflow: hidden, no
+   JS positioning, nothing to drift out of place if the grid scrolls while
+   it's open. */
+.col-filter-inline {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    background: #ffffff;
+    padding: 0 8px;
+}
+
+.col-filter-inline input {
+    width: 100%;
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    padding: 4px 6px;
+    border: 1px solid var(--border-light);
+    border-radius: 3px;
+    color: var(--text-body);
+    box-sizing: border-box;
+}
+
+.col-filter-inline input:focus {
+    outline: none;
+    border-color: var(--teal);
 }
 
 .row {

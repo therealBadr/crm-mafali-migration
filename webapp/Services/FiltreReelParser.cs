@@ -23,12 +23,28 @@ namespace MafaliCrm.Web.Services;
 // treats '%' as a wildcard under '=' too, not just under LIKE.
 public static class FiltreReelParser
 {
-    public static (string Predicate, object[] Args) Parse(string filtreReel)
+    public static (string Predicate, object[] Args) Parse(string filtreReel) =>
+        Parse(filtreReel, LegacyNameToFieldKey, ClientFilterService.Fields, ClientFilterService.PropertyName);
+
+    // Historique's own field vocabulary is smaller than Client's and lives
+    // in HistoriqueFilterService instead — same grammar, same operator
+    // templates, just resolved against a different table's field maps so a
+    // saved Historique filtre_reel parses against Historique's own columns
+    // (e.g. "Num_Client" resolves here, not against France_Optique's
+    // Cle_Opl, which Historique has no equivalent field for at all).
+    public static (string Predicate, object[] Args) ParseHistorique(string filtreReel) =>
+        Parse(filtreReel, HistoriqueLegacyNameToFieldKey, HistoriqueFilterService.Fields, HistoriqueFilterService.PropertyName);
+
+    private static (string Predicate, object[] Args) Parse(
+        string filtreReel,
+        Dictionary<string, string> legacyNameToFieldKey,
+        List<FilterField> fields,
+        Dictionary<string, string> propertyName)
     {
         var tokens = Tokenize(filtreReel);
         var pos = 0;
         var args = new List<object>();
-        var predicate = ParseOr(tokens, ref pos, args, filtreReel);
+        var predicate = ParseOr(tokens, ref pos, args, filtreReel, legacyNameToFieldKey, fields, propertyName);
         if (pos != tokens.Count)
         {
             throw new FormatException($"Unexpected \"{tokens[pos].Text}\" in filter: \"{filtreReel}\"");
@@ -110,31 +126,34 @@ public static class FiltreReelParser
     //      string directly (no separate AST — nothing else consumes it). ----
 
     // orExpr := andExpr (OU andExpr)*
-    private static string ParseOr(List<Token> tokens, ref int pos, List<object> args, string original)
+    private static string ParseOr(List<Token> tokens, ref int pos, List<object> args, string original,
+        Dictionary<string, string> legacyNameToFieldKey, List<FilterField> fields, Dictionary<string, string> propertyName)
     {
-        var parts = new List<string> { ParseAnd(tokens, ref pos, args, original) };
+        var parts = new List<string> { ParseAnd(tokens, ref pos, args, original, legacyNameToFieldKey, fields, propertyName) };
         while (pos < tokens.Count && tokens[pos].Type == TokenType.Ou)
         {
             pos++;
-            parts.Add(ParseAnd(tokens, ref pos, args, original));
+            parts.Add(ParseAnd(tokens, ref pos, args, original, legacyNameToFieldKey, fields, propertyName));
         }
         return parts.Count == 1 ? parts[0] : "(" + string.Join(" || ", parts) + ")";
     }
 
     // andExpr := term (ET term)*
-    private static string ParseAnd(List<Token> tokens, ref int pos, List<object> args, string original)
+    private static string ParseAnd(List<Token> tokens, ref int pos, List<object> args, string original,
+        Dictionary<string, string> legacyNameToFieldKey, List<FilterField> fields, Dictionary<string, string> propertyName)
     {
-        var parts = new List<string> { ParseTerm(tokens, ref pos, args, original) };
+        var parts = new List<string> { ParseTerm(tokens, ref pos, args, original, legacyNameToFieldKey, fields, propertyName) };
         while (pos < tokens.Count && tokens[pos].Type == TokenType.Et)
         {
             pos++;
-            parts.Add(ParseTerm(tokens, ref pos, args, original));
+            parts.Add(ParseTerm(tokens, ref pos, args, original, legacyNameToFieldKey, fields, propertyName));
         }
         return parts.Count == 1 ? parts[0] : "(" + string.Join(" && ", parts) + ")";
     }
 
     // term := '(' orExpr ')' | comparison
-    private static string ParseTerm(List<Token> tokens, ref int pos, List<object> args, string original)
+    private static string ParseTerm(List<Token> tokens, ref int pos, List<object> args, string original,
+        Dictionary<string, string> legacyNameToFieldKey, List<FilterField> fields, Dictionary<string, string> propertyName)
     {
         if (pos >= tokens.Count)
         {
@@ -143,24 +162,25 @@ public static class FiltreReelParser
         if (tokens[pos].Type == TokenType.LParen)
         {
             pos++;
-            var inner = ParseOr(tokens, ref pos, args, original);
+            var inner = ParseOr(tokens, ref pos, args, original, legacyNameToFieldKey, fields, propertyName);
             Expect(tokens, ref pos, TokenType.RParen, original);
             return inner;
         }
-        return ParseComparison(tokens, ref pos, args, original);
+        return ParseComparison(tokens, ref pos, args, original, legacyNameToFieldKey, fields, propertyName);
     }
 
     // comparison := IDENT ('=' | '<>' | '<' | '<=' | '>' | '>=' | LIKE | NOT LIKE) value
     //             | IDENT BETWEEN value AND value
-    private static string ParseComparison(List<Token> tokens, ref int pos, List<object> args, string original)
+    private static string ParseComparison(List<Token> tokens, ref int pos, List<object> args, string original,
+        Dictionary<string, string> legacyNameToFieldKey, List<FilterField> fields, Dictionary<string, string> propertyName)
     {
         var fieldToken = Expect(tokens, ref pos, TokenType.Ident, original);
-        if (!LegacyNameToFieldKey.TryGetValue(fieldToken.Text.ToUpperInvariant(), out var fieldKey))
+        if (!legacyNameToFieldKey.TryGetValue(fieldToken.Text.ToUpperInvariant(), out var fieldKey))
         {
             throw new FormatException($"Unknown field \"{fieldToken.Text}\" in filter: \"{original}\"");
         }
-        var meta = ClientFilterService.Fields.First(f => f.Field == fieldKey);
-        var prop = ClientFilterService.PropertyName[fieldKey];
+        var meta = fields.First(f => f.Field == fieldKey);
+        var prop = propertyName[fieldKey];
 
         if (pos < tokens.Count && tokens[pos].Type == TokenType.Between)
         {
@@ -194,9 +214,41 @@ public static class FiltreReelParser
             return BuildWildcardClause(prop, raw, negated, args);
         }
 
+        // "" is HFSQL's blank, same convention as BuildWildcardClause's
+        // all-'%' case above — comparing directly against it means "is
+        // blank" / "is not blank", the opposite null-handling from every
+        // other Eq/Ne comparison (where blank, migrated to NULL, passes
+        // Ne but not Eq — correct for "Note <> '9999'", since a blank
+        // note genuinely isn't "9999"). A real saved filter surfaced the
+        // difference: "Telephone NOT LIKE ''" means "has an actual phone
+        // number" — blank/NULL telephone must NOT pass that, confirmed
+        // against real data (see BuildBlankClause).
+        if (meta.Type == FieldType.Text && raw == "")
+        {
+            return BuildBlankClause(prop, MapComparisonOperator(opToken, negated), args);
+        }
+
         var value = CastLegacyValue(meta.Type, raw, original);
         var index = args.Count; args.Add(value);
-        return ClientFilterService.OperatorTemplate(prop, MapComparisonOperator(opToken, negated), $"@{index}");
+        return ClientFilterService.OperatorTemplate(prop, ClientFilterService.EffectiveOperator(MapComparisonOperator(opToken, negated), raw), $"@{index}", meta.Type, args);
+    }
+
+    // Bypasses OperatorTemplate/Fold entirely, same reasoning as
+    // BuildWildcardClause bypassing it for the all-'%' shape — this is a
+    // sentinel comparison ("is/isn't blank"), not a real value comparison,
+    // so the usual case/accent folding is irrelevant and the null-handling
+    // needs to run backwards from every other Eq/Ne (see the comment
+    // above). Only Eq/Ne are meaningful against blank — Gt/Lt/etc. against
+    // "" never appear in real data and aren't guessed at here.
+    private static string BuildBlankClause(string prop, Operator op, List<object> args)
+    {
+        var index = args.Count; args.Add(string.Empty);
+        return op switch
+        {
+            Operator.Eq => $"({prop} == null || {prop} == @{index})",
+            Operator.Ne => $"({prop} != null && {prop} != @{index})",
+            _ => throw new FormatException($"Unsupported operator for a blank ('') comparison on field \"{prop}\"."),
+        };
     }
 
     private static Operator MapComparisonOperator(Token opToken, bool negated) => opToken switch
@@ -217,8 +269,27 @@ public static class FiltreReelParser
     // only two shapes present anywhere in the real 66 saved filters. A
     // leading-only pattern ('%text') never appears in real data, so it's
     // treated as unsupported rather than guessed at.
+    //
+    // A pattern that's nothing but '%' (one or more) is its own case, kept
+    // separate from the Contains/StartsWith path below: HFSQL's LIKE '%'
+    // means "matches any value, including no value at all" — it includes
+    // NULLs. Postgres/EF's null-guarded Contains (OperatorTemplate's
+    // "prop != null && prop.Contains(...)") would silently exclude every
+    // NULL row instead, which is exactly the discrepancy Badr reported —
+    // (Famille='Opticien FRANCE') et (Email LIKE '%') gave 18,650 in the
+    // legacy system vs 13,776 in Postgres, a gap of precisely the 4,874
+    // clients whose Email is NULL. Bypassing OperatorTemplate entirely for
+    // this shape (rather than adding an "OR prop IS NULL" branch to
+    // Contains generally) keeps every other real Contains/StartsWith usage
+    // — which must still exclude NULLs, since NULL genuinely doesn't
+    // contain any real substring — unchanged.
     private static string BuildWildcardClause(string prop, string raw, bool negated, List<object> args)
     {
+        if (raw.Length > 0 && raw.All(c => c == '%'))
+        {
+            return negated ? "false" : "true";
+        }
+
         var leading = raw.StartsWith('%');
         var trailing = raw.EndsWith('%');
         // Computed from the original bounds, not chained on the same
@@ -234,7 +305,9 @@ public static class FiltreReelParser
         else throw new FormatException($"Unsupported wildcard position in value \"{raw}\" (only \"text%\" and \"%text%\" are supported).");
 
         var index = args.Count; args.Add(stripped);
-        return ClientFilterService.OperatorTemplate(prop, op, $"@{index}");
+        // Always Text — this method is only ever called from the
+        // meta.Type == FieldType.Text branch above.
+        return ClientFilterService.OperatorTemplate(prop, op, $"@{index}", FieldType.Text, args);
     }
 
     private static string ParseValueToken(List<Token> tokens, ref int pos, string original)
@@ -296,6 +369,11 @@ public static class FiltreReelParser
 
     private static readonly Dictionary<string, string> LegacyNameToFieldKey =
         ClientFilterService.LegacyFieldName.ToDictionary(
+            kv => kv.Value.ToUpperInvariant(),
+            kv => kv.Key);
+
+    private static readonly Dictionary<string, string> HistoriqueLegacyNameToFieldKey =
+        HistoriqueFilterService.LegacyFieldName.ToDictionary(
             kv => kv.Value.ToUpperInvariant(),
             kv => kv.Key);
 }

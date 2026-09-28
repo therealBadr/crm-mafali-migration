@@ -118,3 +118,156 @@
 .btn-remove-value:active {
     transform: scale(0.92);
 }
+
+/* "Command Strip Workbench" — presentation only, appended on top of the
+   existing table/value-btn rules above (kept, not replaced). */
+
+.page {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 1px solid var(--color-workbench-border);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.toolbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.toolbar .title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.btn-primary {
+    background: var(--color-coral);
+    background-image: none;
+    color: #ffffff;
+    border: none;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.btn-outline,
+.btn-default {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-outline:hover:not(:disabled),
+.btn-default:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.search-bar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.search-input {
+    font-family: var(--font-sans-workbench);
+    border: 1px solid var(--color-workbench-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.modal-backdrop {
+    background: var(--color-ink-scrim);
+}
+
+.modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: -8px 8px 32px -20px rgba(23, 32, 51, 0.55);
+    font-family: var(--font-sans-workbench);
+}
+
+.modal h3 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+}
+
+/* Table overrides — same visual language as the div-based grids elsewhere:
+   hairline borders, uppercase tracked muted headers, no zebra. */
+.filter-table th,
+.filter-table td {
+    color: var(--color-ink);
+    font-family: var(--font-sans-workbench);
+    border-right: 1px solid var(--color-workbench-border);
+}
+
+.filter-table thead th {
+    background: var(--color-paper);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.filter-table tbody tr {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.filter-table tbody tr:nth-child(even) {
+    background: var(--color-surface);
+}
+
+.filter-table tbody tr:hover {
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-ink) 4%);
+}
+
+.value-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.btn-add-value {
+    background: var(--color-coral);
+    box-shadow: none;
+}
+
+.btn-add-value:hover {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.btn-add-value:active {
+    background: var(--color-coral);
+    filter: brightness(0.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .value-btn,
+    .filter-table tbody tr {
+        transition: none !important;
+    }
+}

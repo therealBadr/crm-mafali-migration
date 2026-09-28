@@ -38,6 +38,7 @@ public static class FriendlyError
     public static string ToUserMessage(Exception ex) => ex switch
     {
         InvalidOperationException => ex.Message,
+        UnauthorizedAccessException => ex.Message,
         FormatException => "Le format saisi n'est pas reconnu. Vérifiez les valeurs saisies et réessayez.",
         OverflowException => "Une valeur saisie est trop grande ou invalide.",
         _ when IsUniqueViolation(ex) => "Cette valeur existe déjà.",

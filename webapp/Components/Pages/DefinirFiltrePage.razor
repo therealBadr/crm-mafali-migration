@@ -1,4 +1,5 @@
 @page "/definir-filtre"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject ClientFilterService FilterSvc
 @inject AssistanteService AssistanteSvc
 @inject FamilleService FamilleSvc
@@ -8,7 +9,7 @@
 
 <PageTitle>Définir un Filtre</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Rechercher et Définir un Filtre</span>
     @if (Plan == 2)
@@ -117,6 +118,10 @@
                                             }
                                         </select>
                                     }
+                                    else if (f.Type == FieldType.Date)
+                                    {
+                                        @DateOrSysdateInput(row, 0)
+                                    }
                                     else
                                     {
                                         <input class="text-input" type="@InputType(f.Type)" value="@row.Values[0]"
@@ -148,6 +153,10 @@
                                                         <option value="@opt">@opt</option>
                                                     }
                                                 </select>
+                                            }
+                                            else if (f.Type == FieldType.Date)
+                                            {
+                                                @DateOrSysdateInput(row, 1)
                                             }
                                             else
                                             {
@@ -181,6 +190,10 @@
                                                     }
                                                 </select>
                                             }
+                                            else if (f.Type == FieldType.Date)
+                                            {
+                                                @DateOrSysdateInput(row, idx)
+                                            }
                                             else
                                             {
                                                 <input class="text-input" style="flex: 1 1 auto; min-width: 0;" type="@InputType(f.Type)" value="@row.Values[idx]"
@@ -203,7 +216,7 @@
             </tbody>
         </table>
     </div>
-    <div class="modal-actions" style="padding: 10px 16px; border-top: 1px solid var(--navy-border); margin: 0;">
+    <div class="modal-actions" style="padding: 10px 16px; border-top: 1px solid var(--color-workbench-border); margin: 0;">
         <button class="btn btn-default" @onclick="HandleReset">Réinitialiser</button>
         <button class="btn btn-primary" disabled="@Searching" @onclick="HandleSearch">Rechercher</button>
     </div>
@@ -216,10 +229,13 @@ else
             <div class="header-row" style="position: sticky; top: 0;">
                 @foreach (var col in ResultColumns)
                 {
-                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])">@col.Label</div>
+                    <div class="cell @ResultSort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])" @onclick='() => ResultSort.Toggle(col.Key)'>
+                        @col.Label @ResultSort.ArrowFor(col.Key)
+                        <ColumnFilterIcon Column="@col.Key" Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
+                    </div>
                 }
             </div>
-            <Virtualize Items="Results" Context="c" ItemSize="34">
+            <Virtualize Items="SortedResults" Context="c" ItemSize="34">
                 <div class="row" style="cursor: default;">
                     @foreach (var col in ResultColumns)
                     {
@@ -391,6 +407,10 @@ else
     private int Count;
     private bool Searching;
     private string? Error;
+    private readonly SortState ResultSort = new();
+    private readonly GridFilterState ResultFilter = new();
+
+    private List<FranceOptique> SortedResults => GridSort.Apply(GridFilter.Apply(Results, ResultFilter, GetResultCellText), ResultSort, GetResultCellText);
 
     private List<string> Assistantes = new();
     private bool SaveModalOpen;
@@ -424,6 +444,50 @@ else
             Error = FriendlyError.ToUserMessage(ex);
         }
     }
+
+    // "Aujourd'hui" — the manual-only workaround (build a normal date
+    // condition, save it, then hand-edit the saved Filtre Réel text to
+    // replace the picked date with the literal keyword SYSDATE) still
+    // works and is untouched; this just gives a real, discoverable path to
+    // the exact same keyword instead of requiring that detour. Represented
+    // purely by the value itself being the string "SYSDATE" — no separate
+    // "is dynamic" flag on RowState — so BuildConditions/BuildLegacyFiltreReel/
+    // HandleSearch all need zero changes: CastValue and CastLegacyValue
+    // already special-case that exact string (see ClientFilterService.cs
+    // and FiltreReelParser.cs) since real saved filters already use SYSDATE
+    // this same way. Checking the box sets the value to "SYSDATE"
+    // (swapping the date picker for a disabled placeholder, since a native
+    // <input type="date"> can't display a non-date string); unchecking
+    // clears it back to empty for a fresh pick, same as every other
+    // operator-change reset in this file.
+    private RenderFragment DateOrSysdateInput(RowState row, int index) =>
+        @<div style="display: flex; align-items: center; gap: 6px;">
+            @if (IsSysdate(row, index))
+            {
+                <input class="text-input" type="text" value="Aujourd'hui" disabled style="flex: 1 1 auto; min-width: 0;" />
+            }
+            else
+            {
+                <input class="text-input" type="date" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[index]"
+                       @oninput="e => row.Values[index] = e.Value?.ToString() ?? string.Empty" />
+            }
+            <label class="checkbox-label" style="margin-bottom: 0; white-space: nowrap;"
+                   title="Utilise la date du jour, recalculée à chaque exécution du filtre (SYSDATE)">
+                <input type="checkbox" checked="@IsSysdate(row, index)"
+                       @onchange="e => SetSysdate(row, index, (bool)(e.Value ?? false))" />
+                Aujourd'hui
+            </label>
+        </div>;
+
+    // Attribute-position C# in Razor can't hold a nested "..." string
+    // literal cleanly (the parser reads it as closing the attribute early)
+    // — these two exist purely to keep the "SYSDATE" literal out of
+    // @onchange/checked expressions above, not because the logic itself
+    // needs a name.
+    private static bool IsSysdate(RowState row, int index) => row.Values[index] == "SYSDATE";
+
+    private static void SetSysdate(RowState row, int index, bool isChecked) =>
+        row.Values[index] = isChecked ? "SYSDATE" : string.Empty;
 
     private static string InputType(FieldType type) => type switch
     {

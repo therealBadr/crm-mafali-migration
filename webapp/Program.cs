@@ -13,6 +13,37 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Some tooling harnesses (browser preview tools, PaaS-style hosts) assign a
+// port via a plain PORT env var rather than the .NET-native conventions
+// (ASPNETCORE_URLS/ASPNETCORE_HTTP_PORTS) — bind to it here if present, so
+// this app runs under that convention too without per-tool Kestrel config.
+// Falls through to normal launch-profile/appsettings behavior when unset.
+if (Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } port)
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+// Real LAN deployment (the self-contained Windows build, launched by
+// double-clicking the .exe — no launch profile, no PORT env var, and
+// ASPNETCORE_ENVIRONMENT defaults to "Production" when nothing else sets
+// it). Bind to every network interface, not just localhost, so other
+// machines on the office network can reach it at
+// http://<this machine's IP>:5298 — otherwise Kestrel's own default
+// (localhost-only) would make it unreachable from anywhere but the one
+// machine running it. Plain HTTP, deliberately: a real TLS cert isn't
+// practical for an internal LAN app (a self-signed one means trusting it
+// by hand on every machine), and UseHttpsRedirection() below is a no-op
+// here anyway with no HTTPS endpoint configured — confirmed live, it just
+// logs a "can't determine HTTPS port" warning and passes the request
+// through, not a redirect loop. Port 5298 kept fixed across builds
+// (previously set externally in an appsettings.Production.json that
+// isn't tracked in git — moved here so it can't quietly go missing from
+// a future deployment package) so the Windows Firewall rule and
+// everyone's bookmarked URL don't need to change build to build.
+else if (!builder.Environment.IsDevelopment())
+{
+    builder.WebHost.UseUrls("http://0.0.0.0:5298");
+}
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -36,7 +67,12 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     .AddCookie(options =>
     {
         options.LoginPath = "/login";
-        options.AccessDeniedPath = "/login";
+        // Was "/login" (same as LoginPath) — meant a logged-in user with
+        // the wrong role for a page landed back on the login form, which
+        // reads as "you're not logged in" rather than "you don't have
+        // access". Real page at /access-denied (AccessDenied.razor) now
+        // gives that case its own clear message.
+        options.AccessDeniedPath = "/access-denied";
     });
 
 // FallbackPolicy requires every endpoint to be authenticated by default,
@@ -74,6 +110,8 @@ builder.Services.AddScoped<ClientService>();
 builder.Services.AddScoped<ClientFilterService>();
 builder.Services.AddScoped<FiltreOperatriceService>();
 builder.Services.AddScoped<HistoriqueService>();
+builder.Services.AddScoped<HistoriqueFilterService>();
+builder.Services.AddScoped<FiltreHistoriqueService>();
 builder.Services.AddScoped<CaService>();
 builder.Services.AddScoped<ClientImportExportService>();
 builder.Services.AddScoped<RappelService>();
@@ -117,7 +155,12 @@ app.MapPost("/login", async (
     var (result, user) = await userService.LoginAsync(login, password);
     if (result != LoginResult.Success || user is null)
     {
-        var reason = result == LoginResult.Inactive ? "inactive" : "invalid";
+        var reason = result switch
+        {
+            LoginResult.Inactive => "inactive",
+            LoginResult.LockedOut => "locked",
+            _ => "invalid",
+        };
         return Results.Redirect($"/login?error={reason}");
     }
 

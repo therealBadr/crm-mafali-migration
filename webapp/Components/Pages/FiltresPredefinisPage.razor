@@ -5,6 +5,8 @@
 @inject HistoriqueService HistoriqueSvc
 @inject NavigationManager Nav
 @inject CurrentUserService CurrentUser
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* Mirrors the real Fen_Filtre ("Filtres prédéfinis"): pick a saved filter,
    see who matches, click a client to see their history below. One thing
@@ -19,15 +21,18 @@
    Commercial is locked to their own name — the dropdown is disabled and
    pre-selected rather than removed, so the layout doesn't shift per role. *@
 
-<PageTitle>Filtres Prédéfinis</PageTitle>
+@* Dynamic tab title — same reasoning as ParcoursClientPage: distinguishes
+   this tab from every other "Filtres Prédéfinis" tab once a filter's
+   loaded. *@
+<PageTitle>@(SelectedFiltreNom?.Trim() is { Length: > 0 } filtreName ? $"{filtreName} – Filtres Prédéfinis" : "Filtres Prédéfinis")</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Filtres Prédéfinis</span>
 </div>
 
 <div class="search-bar" style="flex-wrap: wrap; row-gap: 8px;">
-    <label style="font-size: 13px; color: var(--header-text);">Assistante :</label>
+    <label style="font-size: 13px; color: var(--color-muted-foreground);">Assistante :</label>
     <select class="search-input" style="min-width: 200px;" value="@SelectedAssistante" disabled="@(!CanViewAll)" @onchange="OnAssistanteChange">
         <option value="">Sélectionner…</option>
         @foreach (var a in Assistantes)
@@ -36,7 +41,7 @@
         }
     </select>
 
-    <label style="font-size: 13px; color: var(--header-text);">Filtre :</label>
+    <label style="font-size: 13px; color: var(--color-muted-foreground);">Filtre :</label>
     <select class="search-input" style="min-width: 220px;" value="@SelectedFiltreNom" disabled="@(SelectedAssistante is null)" @onchange="OnFiltreChange">
         <option value="">&lt; Aucun &gt;</option>
         @foreach (var f in Filtres)
@@ -56,7 +61,7 @@
 
     @if (SelectedFiltreNom is not null)
     {
-        <span class="result-count" style="font-weight: 600; color: var(--teal-active);">
+        <span class="result-count" style="font-weight: 600; color: var(--color-teal-2-strong);">
             @Count Client(s) pour le filtre sélectionné.
         </span>
     }
@@ -75,13 +80,17 @@ else
 {
     <div class="table-wrap" style="flex: 3 1 0; overflow-x: auto;">
         <div style="width: 100%; min-width: @(ClientTotalWidth)px;">
-            <div class="header-row" style="position: sticky; top: 0;">
+            <div class="header-row" style="position: sticky; top: 0;" @ref="ClientHeaderRowRef">
                 @foreach (var col in ClientColumns)
                 {
-                    <div class="cell" style="@ColStyle(col, ClientColumns)">@col.Label</div>
+                    <div class="cell" style="@ColStyle(col, ClientColumns)">
+                        <span class="col-sort-label @ClientSort.CssClass(col.Key)" @onclick='() => ClientSort.Toggle(col.Key)'>@col.Label @ClientSort.ArrowFor(col.Key)</span>
+                        <ColumnFilterIcon Column="@col.Key" Filter="ClientFilter" OnFilterChanged="StateHasChanged" />
+                        <span class="col-resize-handle" data-col-key="@col.Key"></span>
+                    </div>
                 }
             </div>
-            <Virtualize Items="Results" Context="c" ItemSize="34">
+            <Virtualize Items="SortedResults" Context="c" ItemSize="34">
                 <div class="row @(c.CleOpl == SelectedClient ? "selected" : "")"
                      @onclick="() => SelectClient(c.CleOpl)"
                      @ondblclick="() => OpenEditIfAllowed(c.CleOpl)">
@@ -103,12 +112,17 @@ else
         </div>
     </div>
 
-    <div style="flex: 2 1 0; min-height: 0; display: flex; flex-direction: column; border-top: 2px solid var(--navy-border); overflow: auto;">
+    <div class="histo-pane table-wrap" style="flex: 2 1 0; min-height: 0; display: flex; flex-direction: column; overflow: auto;">
+        <p class="histo-pane-label">Historique du client sélectionné</p>
         <div style="width: 100%; min-width: @(HistoTotalWidth)px;">
-            <div class="header-row" style="position: sticky; top: 0;">
+            <div class="header-row" style="position: sticky; top: 0;" @ref="HistoHeaderRowRef">
                 @foreach (var col in HistoColumns)
                 {
-                    <div class="cell" style="@ColStyle(col, HistoColumns)">@col.Label</div>
+                    <div class="cell" style="@ColStyle(col, HistoColumns)">
+                        <span class="col-sort-label @HistoSort.CssClass(col.Key)" @onclick='() => HistoSort.Toggle(col.Key)'>@col.Label @HistoSort.ArrowFor(col.Key)</span>
+                        <ColumnFilterIcon Column="@col.Key" Filter="HistoFilter" OnFilterChanged="StateHasChanged" />
+                        <span class="col-resize-handle" data-col-key="@col.Key"></span>
+                    </div>
                 }
             </div>
             @if (SelectedClient is null)
@@ -117,7 +131,7 @@ else
             }
             else
             {
-                <Virtualize Items="SelectedHistorique" Context="h" ItemSize="34">
+                <Virtualize Items="SortedHistorique" Context="h" ItemSize="34">
                     <div class="row" style="cursor: default;">
                         @foreach (var col in HistoColumns)
                         {
@@ -132,7 +146,21 @@ else
 </div>
 
 @code {
-    private record ColumnDef(string Key, string Label, int Width);
+    // A class, not a record — Width needs to be mutable for column resize
+    // (records default positional properties to init-only).
+    private class ColumnDef
+    {
+        public string Key { get; }
+        public string Label { get; }
+        public int Width { get; set; }
+
+        public ColumnDef(string key, string label, int width)
+        {
+            Key = key;
+            Label = label;
+            Width = width;
+        }
+    }
 
     // Exact order/set from the real Fen_Filtre window doc (33 columns).
     private readonly List<ColumnDef> ClientColumns = new()
@@ -194,6 +222,18 @@ else
     private static string ColStyle(ColumnDef col, List<ColumnDef> columns) =>
         GridLayout.ColStyle(col.Width, col == columns[^1]);
 
+    // Lets the dashboard's "Mes filtres" shortcuts jump straight into a
+    // specific filter's results (?assistante=&filtre=) instead of landing
+    // on the bare picker — same query-param-deep-link pattern Parcours
+    // Client already uses for its own mode/assistante/filtre/start params.
+    [SupplyParameterFromQuery(Name = "assistante")]
+    [Parameter]
+    public string? QueryAssistante { get; set; }
+
+    [SupplyParameterFromQuery(Name = "filtre")]
+    [Parameter]
+    public string? QueryFiltre { get; set; }
+
     private List<string> Assistantes = new();
     private string? SelectedAssistante;
 
@@ -204,12 +244,105 @@ else
     private int Count;
     private long? SelectedClient;
     private List<Historique> SelectedHistorique = new();
+    private readonly SortState ClientSort = new();
+    private readonly SortState HistoSort = new();
+    private readonly GridFilterState ClientFilter = new();
+    private readonly GridFilterState HistoFilter = new();
+
+    private List<FranceOptique> SortedResults => GridSort.Apply(GridFilter.Apply(Results, ClientFilter, GetClientCellText), ClientSort, GetClientCellText);
+    private List<Historique> SortedHistorique => GridSort.Apply(GridFilter.Apply(SelectedHistorique, HistoFilter, GetHistoCellText), HistoSort, GetHistoCellText);
 
     private bool ModifierEnregistrement;
     private bool Loading;
     private string? Error;
 
     private bool CanViewAll;
+
+    // Two grids on this one component (client results + that client's
+    // historique) — each needs its own header ref and its own pair of
+    // [JSInvokable] method names, since mafaliColumnResize.attach can only
+    // disambiguate which grid a JS callback is for by which method name it
+    // calls (see app.js's resizeMethod/autoFitMethod parameters).
+    private ElementReference ClientHeaderRowRef;
+    private ElementReference HistoHeaderRowRef;
+    private DotNetObjectReference<FiltresPredefinisPage>? ResizeDotNetRef;
+    private bool ResizeAttached;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!ResizeAttached && !Loading)
+        {
+            ResizeAttached = true;
+            ResizeDotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("mafaliColumnResize.attach", ClientHeaderRowRef, ResizeDotNetRef,
+                nameof(OnClientColumnResized), nameof(GetClientColumnAutoFitData));
+            await JS.InvokeVoidAsync("mafaliColumnResize.attach", HistoHeaderRowRef, ResizeDotNetRef,
+                nameof(OnHistoColumnResized), nameof(GetHistoColumnAutoFitData));
+        }
+    }
+
+    [JSInvokable]
+    public void OnClientColumnResized(string key, int width)
+    {
+        var col = ClientColumns.FirstOrDefault(c => c.Key == key);
+        if (col is null) return;
+        col.Width = width;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnHistoColumnResized(string key, int width)
+    {
+        var col = HistoColumns.FirstOrDefault(c => c.Key == key);
+        if (col is null) return;
+        col.Width = width;
+        StateHasChanged();
+    }
+
+    public class ColumnAutoFitData
+    {
+        public string Header { get; set; } = "";
+        public List<string> Values { get; set; } = new();
+    }
+
+    [JSInvokable]
+    public ColumnAutoFitData GetClientColumnAutoFitData(string key)
+    {
+        var col = ClientColumns.FirstOrDefault(c => c.Key == key);
+        return new ColumnAutoFitData
+        {
+            Header = col?.Label ?? "",
+            Values = Results.Select(item => GetClientCellText(item, key)).ToList(),
+        };
+    }
+
+    [JSInvokable]
+    public ColumnAutoFitData GetHistoColumnAutoFitData(string key)
+    {
+        var col = HistoColumns.FirstOrDefault(c => c.Key == key);
+        return new ColumnAutoFitData
+        {
+            Header = col?.Label ?? "",
+            Values = SelectedHistorique.Select(item => GetHistoCellText(item, key)).ToList(),
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ResizeAttached)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("mafaliColumnResize.detach", ClientHeaderRowRef);
+                await JS.InvokeVoidAsync("mafaliColumnResize.detach", HistoHeaderRowRef);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone (e.g. tab closed) — nothing to clean up client-side.
+            }
+        }
+        ResizeDotNetRef?.Dispose();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -227,11 +360,23 @@ else
 
         // Commercial can't browse anyone else's filters — lock the picker
         // to their own name and load it immediately instead of waiting for
-        // a selection that isn't really a choice.
+        // a selection that isn't really a choice. QueryAssistante is
+        // deliberately ignored in this branch (not just unused) — a
+        // Commercial can only ever land on their own filters regardless of
+        // what a deep link asks for, same scoping the picker itself enforces.
         if (!CanViewAll && currentLogin is not null)
         {
             Assistantes = new List<string> { currentLogin };
             await SelectAssistante(currentLogin);
+        }
+        else if (!string.IsNullOrEmpty(QueryAssistante))
+        {
+            await SelectAssistante(QueryAssistante);
+        }
+
+        if (!string.IsNullOrEmpty(QueryFiltre) && SelectedAssistante is not null)
+        {
+            await SelectFiltre(QueryFiltre);
         }
     }
 
@@ -264,9 +409,13 @@ else
         }
     }
 
-    private async Task OnFiltreChange(ChangeEventArgs e)
+    private async Task OnFiltreChange(ChangeEventArgs e) => await SelectFiltre(e.Value?.ToString());
+
+    // Split out of OnFiltreChange so a deep link (dashboard's "Mes filtres"
+    // shortcuts, ?assistante=&filtre=) can select a filter the same way a
+    // manual dropdown pick does, instead of duplicating this logic.
+    private async Task SelectFiltre(string? nom)
     {
-        var nom = e.Value?.ToString();
         SelectedFiltreNom = string.IsNullOrEmpty(nom) ? null : nom;
         Results = new();
         Count = 0;
@@ -279,6 +428,11 @@ else
         var filtre = Filtres.FirstOrDefault(f => f.NomFiltre == SelectedFiltreNom);
         if (filtre is null) return;
 
+        // Loading gates the @if that mounts the header-row elements
+        // (see markup above) — flipping it true then false tears down and
+        // rebuilds those DOM nodes, so the resize listeners attached to the
+        // old ones need to be re-attached to the new ones next render.
+        ResizeAttached = false;
         Loading = true;
         try
         {
@@ -361,12 +515,10 @@ else
         "statuts_clients" => c.StatutsClients ?? "",
         "tel_bis" => c.TelBis ?? "",
         "note_perm" => c.NotePerm ?? "",
-        "etat_client" => c.EtatClient switch
-        {
-            "1" => "Client",
-            "2" => "Prospect",
-            _ => "Non défini",
-        },
+        // No "Non défini" bucket anymore (2026-09-04) — anything that isn't
+        // literally "1" reads as Prospect, including legacy junk ("0"/
+        // blank/"-1"/typos) that was never explicitly set to Client.
+        "etat_client" => c.EtatClient == "1" ? "Client" : "Prospect",
         _ => "",
     };
 

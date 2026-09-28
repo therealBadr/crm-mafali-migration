@@ -1,11 +1,33 @@
+/* Edge-to-edge now (page-flush class, app.css), same treatment as
+   Recherche Client and for the same reason (Badr: the app's shared
+   floating-card-on-gray-canvas convention wastes visible space around
+   the actual content) — no rounded corners/shadow, no space-5 inset.
+   flex: 1, not height: 100% — height: 100% would compute against
+   .app-body's content box from BEFORE page-flush's negative margin
+   pulls this out past the padding, undershooting by 2×space-5 (48px)
+   vertically. flex: 1 fills whatever .app-body actually has left,
+   bleed included, the same fix Recherche Client needed for the same
+   reason. overflow: hidden stays — .pc-body below already owns its own
+   scroll (overflow-y: auto), so nothing here needs a second one.
+
+   min-height: 0 explicitly, not left implicit — Recherche Client hit a
+   real bug from skipping this: a flex item's min-height defaults to
+   auto ("never shrink below your content's natural size"), which with
+   real data loaded let that page's card grow to fit its *entire*
+   un-virtualized grid instead of staying capped at the viewport,
+   breaking <Virtualize> outright (rendered zero rows, one enormous
+   empty scroll area). overflow: hidden here technically already forces
+   the same "treat auto as 0" behavior per the flexbox spec, but that's
+   a subtle, easy-to-miss side effect of a property set for an unrelated
+   reason — writing it explicitly means this page doesn't depend on
+   that overflow value never changing for its layout to hold. */
 .pc-page {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
     background: #ffffff;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
 }
 
 /* Was solid navy — the one screen that never got the shared-chrome pass
@@ -15,22 +37,49 @@
    moment the rest of the app moved off navy-as-default-background
    (Badr: "styling/colors not 100% right" on this exact page). Same
    treatment as .toolbar/.topbar now. */
+/* justify-content: space-between (the previous rule here) split leftover
+   space into equal gaps between ALL three groups, not just the last one —
+   so when the third group's own width changed (the "Enregistrement
+   bloqué" badge below appearing/disappearing depending on that specific
+   client's Bloqué flag), BOTH gaps got recalculated, and the arrows group
+   shifted even though its own content never changed. That's why the
+   fixed-width .pc-position fix alone didn't hold: position 1 and 2 can
+   have the same digit count and still trigger this if their Bloqué value
+   differs. flex-start anchors groups 1+2 together at the left, immovable
+   regardless of anything after them; margin-left: auto on the third group
+   (only) pushes it to the right edge independently, so its width changes
+   can never again feed back into where the arrows sit. */
 .pc-topbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: var(--space-3) var(--space-4);
+    gap: 8px;
+    padding: 6px var(--space-4);
     background: #ffffff;
     border-bottom: 1px solid var(--border-light);
     box-shadow: var(--shadow-sm);
 }
 
+/* Narrower than the shared .btn default (8px 16px) — four nav arrows
+   plus Aller add up fast, and at a moderate window width that was
+   enough on its own to push this whole group (and the Etat Client/
+   Bloqué group after it) onto a wrapped second line, adding a full
+   extra topbar row's worth of height to a page that was already tight
+   on vertical room. */
+.pc-topbar .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
 .pc-topbar-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
+}
+
+.pc-topbar-group:last-child {
+    margin-left: auto;
 }
 
 .pc-title {
@@ -49,16 +98,27 @@
 }
 
 .pc-id {
-    width: 90px;
+    width: 80px;
     margin-bottom: 0;
 }
 
 .pc-select-sm {
-    width: 130px;
+    width: 110px;
     margin-bottom: 0;
 }
 
+/* Fixed width + right-aligned text, not just auto-sized to content: a
+   plain <span> here means its rendered width changes with the digit
+   count of the position ("2 / 93234" vs "90139 / 93234"), which shifts
+   every flex sibling after it — the four nav arrows included — left or
+   right depending on which client you're on. Right-aligning inside a
+   fixed box anchors the arrows' position regardless of how long the
+   numbers get; 110px comfortably fits the real max ("93234 / 93234")
+   with room to spare. */
 .pc-position {
+    display: inline-block;
+    width: 110px;
+    text-align: right;
     font-size: 13px;
     font-weight: 600;
     color: var(--navy);
@@ -125,41 +185,148 @@
 }
 
 .pc-col-title {
-    margin: 0 0 10px;
+    margin: 0 0 6px;
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--navy);
     border-bottom: 2px solid var(--teal);
-    padding-bottom: 6px;
+    padding-bottom: 4px;
 }
 
+/* Legacy reference (Fen_Parcours_Client): every field visible at once in
+   a noticeably smaller window than this page's own browser viewport, no
+   scrolling required to reach the history grid at the bottom. Same
+   density pass as Recherche Client, applied here for the same reason —
+   Contact/Opération (the middle column, ~12 field-rows plus a 4-row
+   Notes textarea) was measured at 712px of needed content height with
+   only ~518-565px actually available, forcing .pc-body's internal
+   scroll on any reasonably sized window. */
 .pc-field {
-    margin-bottom: 10px;
+    margin-bottom: 4px;
 }
 
 .pc-field label {
     display: block;
-    font-size: 12px;
+    font-size: 10px;
+    line-height: 1.2;
     color: var(--header-text);
-    margin-bottom: 3px;
+    margin-bottom: 2px;
 }
 
 .pc-field-row {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    margin-bottom: 4px;
 }
 
+/* margin-bottom: 0 here, not left to inherit from .pc-field — same fix
+   as Recherche Client's .rc-field-row: a nested .pc-field's own bottom
+   margin would otherwise collapse with .pc-field-row's (same property,
+   no padding/border between them). Both happen to already be 10px, so
+   there's no visible bug today, but owning the gap in exactly one place
+   means that stays true on purpose, not by coincidence. */
 .pc-field-row .pc-field {
     flex: 1;
+    margin-bottom: 0;
 }
 
+/* Every input/select/textarea on this page carries the global .text-input
+   class (app.css: 7px padding, no fixed height) — same mismatch
+   Recherche Client had: a native <select>'s UA chrome doesn't grow with
+   padding the same way <input> does, so the two end up visibly different
+   heights side by side in the same row (e.g. Pays + Magasin). Fixed
+   height instead of just padding puts both on the same box regardless of
+   element type. No ::deep needed here — unlike Recherche Client, this
+   page uses plain <input>/<select>/<textarea> directly, no
+   <AutocompleteInput> children to reach across a component boundary. */
+.pc-body .text-input {
+    margin-bottom: 0;
+    height: 24px;
+    padding: 0 6px;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+.pc-body textarea.text-input {
+    height: auto;
+    padding: 4px 6px;
+}
+
+/* Large, bold, red text — a deliberate visual callout, not styled like any
+   other field on the screen. Height bumped to match the taller text;
+   everything else about the box (padding/border) stays the shared
+   .text-input look. (Earlier "Legacy: Fen_Parcours_Client" attribution
+   removed 2026-09-22 — Badr confirmed neither this styling claim nor the
+   "Telephone de référence" label it was attached to are real legacy
+   terminology; no source for either was ever found.) */
+.pc-body .pc-phone-primary {
+    height: 30px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--danger-text);
+}
+
+/* The two standalone checkboxes in this page's fields (Rappel RDV,
+   Modifier la Note) aren't wrapped in .pc-field — they use the global
+   .checkbox-label class directly, whose own margin-bottom (10px,
+   app.css) was tuned for spacious forms same as .text-input's default,
+   not this density pass. */
+.pc-body .checkbox-label {
+    margin-bottom: 2px;
+}
+
+/* Legacy's CA list box is a narrow, fixed-width control (a small fraction
+   of its column), not stretched to fill the available width like every
+   other field on this page — Badr: "it doesn't have that large of a
+   width". 200px comfortably fits the real data ("93234" + "---&gt;" +
+   a 7-digit CA value) without wrapping.
+   flex: 0 0 200px, not a bare width — this panel sits in a flex row next
+   to Note Permanente; without flex-shrink: 0 a flex item's declared width
+   is only a suggestion, and the panel was visibly getting crushed down to
+   ~125px to make room instead of holding its real 200px square. */
 .pc-ca-panel {
+    flex: 0 0 200px;
+    width: 200px;
     border: 1px solid var(--border-light);
     border-radius: var(--radius-sm);
     padding: 10px;
     background: var(--header-bg);
+}
+
+/* Dedicated row (not the shared .pc-field-row) — this pairing needs its
+   own breathing room, wider than the 8px every other field-row on this
+   page uses, without changing anything else's spacing. flex-wrap: wrap +
+   both children pinned to fixed widths (flex: none) means at a narrow
+   column width Note Permanente drops to its own line below the CA panel
+   instead of squeezing either box out of shape. */
+.pc-ca-note-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 20px 28px;
+    margin-bottom: 16px;
+}
+
+/* Note Permanente reads as a real box beside the Chiffre d'Affaire panel
+   (Badr), wide enough to actually hold a permanent note instead of just
+   matching the CA panel's narrow 200px. flex: none on the field wrapper
+   keeps it from being squeezed by its neighbor. */
+.pc-note-perm-field {
+    flex: none;
+}
+
+.pc-note-perm-field label {
+    margin-bottom: 6px;
+}
+
+.pc-body textarea.text-input.pc-note-perm {
+    width: 280px;
+    height: 200px;
+    resize: none;
+    padding: 10px 12px;
+    line-height: 1.5;
 }
 
 .pc-ca-list {
@@ -170,7 +337,7 @@
 .pc-ca-row {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     padding: 4px 6px;
     font-size: 13px;
     border-bottom: 1px solid var(--border-lighter);
@@ -188,8 +355,268 @@
     background: var(--header-bg);
 }
 
+/* Was 260px — Badr/Bruno feedback after real testing: this fixed-height
+   strip was eating space the main edit form above needed more, for more
+   rows of history than anyone actually scans in one sitting. 160px keeps
+   ~3-4 rows visible (still scrollable for more) while giving the form
+   noticeably more room. */
 .pc-histo {
-    height: 260px;
+    height: 160px;
     flex: none;
     border-top: 2px solid var(--navy-border);
+}
+
+/* Same box model as .btn-outline (padding/font-size/border-radius all
+   come from the shared .btn base, untouched) — only recolored, so the
+   record-navigation arrows read more clearly against the toolbar without
+   shifting size or position. Teal is this app's established accent
+   (already used for .btn-primary/focus rings), not a new color. */
+.pc-nav-arrow {
+    background: #ffffff;
+    border: 1px solid var(--teal);
+    color: var(--teal-active);
+}
+
+.pc-nav-arrow:hover:not(:disabled) {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #ffffff;
+}
+
+.pc-nav-arrow:active:not(:disabled) {
+    background: var(--teal-active);
+    border-color: var(--teal-active);
+    color: #ffffff;
+}
+
+/* "Command Strip Workbench" — presentation only, scoped to this page.
+   Same append-not-replace approach as Recherche Client's own CSS above:
+   every rule here overrides a shared app.css/global class for this page
+   only, the pre-existing .pc-* structural rules (and their comments,
+   still true) are untouched. */
+
+.pc-page {
+    background: var(--color-surface);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.pc-topbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.pc-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.pc-topbar label {
+    color: var(--color-muted-foreground);
+}
+
+.pc-position {
+    color: var(--color-ink);
+}
+
+.pc-col-title {
+    color: var(--color-muted-foreground);
+    border-bottom-color: var(--color-coral);
+}
+
+.pc-field label {
+    color: var(--color-muted-foreground);
+}
+
+.pc-body .text-input:focus {
+    outline: none;
+    border-color: var(--color-coral);
+    box-shadow: 0 0 0 3px var(--color-coral-soft);
+}
+
+/* Legacy's deliberate red callout stays a callout, just on this page's
+   own palette — coral instead of the old hardcoded --danger-text. */
+.pc-body .pc-phone-primary {
+    color: var(--color-coral);
+}
+
+.pc-ca-panel {
+    background: var(--color-paper);
+    border-color: var(--color-workbench-border);
+}
+
+.pc-ca-row {
+    border-bottom-color: var(--color-workbench-border);
+}
+
+.pc-actions {
+    background: var(--color-paper);
+    border-top: 1px solid var(--color-workbench-border);
+}
+
+.pc-histo {
+    border-top: 2px solid var(--color-ink);
+}
+
+/* Bloqué lock overlay — coral text reads as the genuine "stop" state it
+   represents, same semantics as Bloqués' badge-danger elsewhere. */
+.pc-blocked-text {
+    color: var(--color-coral);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.btn-primary {
+    background: var(--color-coral);
+    background-image: none;
+    color: #ffffff;
+    border: none;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.btn-outline,
+.btn-default {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-outline:hover:not(:disabled),
+.btn-default:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+}
+
+/* Same box model as .btn-outline (this page's nav buttons carry both
+   classes), only recolored to this page's teal accent (--color-teal-2)
+   — must come after .btn-outline above to win the cascade at equal
+   specificity. Navigation arrows aren't urgent, so they stay off coral,
+   matching every other page's "coral is scarce" rule. */
+.pc-nav-arrow {
+    background: var(--color-surface);
+    border: 1px solid var(--color-teal-2);
+    color: var(--color-teal-2-strong);
+}
+
+.pc-nav-arrow:hover:not(:disabled) {
+    background: var(--color-teal-2);
+    border-color: var(--color-teal-2);
+    color: #ffffff;
+}
+
+.pc-nav-arrow:active:not(:disabled) {
+    background: var(--color-teal-2-strong);
+    border-color: var(--color-teal-2-strong);
+    color: #ffffff;
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.checkbox-label {
+    color: var(--color-ink);
+}
+
+/* Bottom historique grid — same shared treatment as every other
+   .header-row/.row grid in the app. */
+
+.header-row {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.header-row .cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    border-right: 1px solid var(--color-workbench-border);
+}
+
+.row {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-workbench-border);
+    transition: background 140ms ease;
+}
+
+.row:hover {
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-ink) 4%);
+}
+
+.row.selected {
+    background: var(--color-ink-soft);
+    box-shadow: inset 3px 0 0 var(--color-ink);
+}
+
+.row.selected:hover {
+    background: var(--color-ink-soft);
+}
+
+.cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 12px;
+    color: var(--color-ink);
+}
+
+.modal-backdrop {
+    background: var(--color-ink-scrim);
+}
+
+.modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: -8px 8px 32px -20px rgba(23, 32, 51, 0.55);
+    font-family: var(--font-sans-workbench);
+}
+
+.modal h3 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+}
+
+.confirm-text {
+    color: var(--color-ink);
+}
+
+.conflict-list,
+.conflict-row {
+    border-color: var(--color-workbench-border);
+}
+
+.badge-success {
+    background: var(--color-teal-2-soft);
+    color: var(--color-teal-2-strong);
+}
+
+.badge-danger {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .row,
+    .btn,
+    .pc-nav-arrow {
+        transition: none !important;
+    }
 }

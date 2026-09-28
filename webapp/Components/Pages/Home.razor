@@ -1,0 +1,166 @@
+@page "/"
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+@inject RappelService RappelSvc
+@inject ClientService ClientSvc
+@inject FiltreOperatriceService FiltreSvc
+@inject UserService UserSvc
+
+@* Real landing page (2026-09-19, Badr: wanted something more professional
+   than dropping people straight into a working screen). Used to just
+   redirect by role — Familles/Bon de Commande/Recherche Client depending
+   on who logged in (see PROGRESS.md for that history). This page replaces
+   that redirect outright: "/" is now itself a per-user dashboard, built
+   entirely from queries other pages already run (Rappels' due-count,
+   Mon Compte's admin stat tiles, Filtres Prédéfinis' own filter list) —
+   no new tracking, no new tables, just surfaced in one place instead of
+   scattered. Every role lands here now, including Commercial and
+   Assistant — not just Admin, who previously got the only real "overview"
+   (Mon Compte's Aperçu tab, still there for the deeper admin drill-down:
+   recent logins, user management). *@
+
+<PageTitle>Tableau de bord</PageTitle>
+
+<div class="page page-flush">
+<div class="toolbar">
+    <span class="title">Tableau de bord</span>
+</div>
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else
+{
+    <div class="dash-body">
+        @if (IsAdmin)
+        {
+            <div class="dash-stats-grid">
+                <div class="dash-stat-card">
+                    <span class="dash-stat-value">@ClientCount</span>
+                    <span class="dash-stat-label">Clients</span>
+                </div>
+                <div class="dash-stat-card">
+                    <span class="dash-stat-value">@ActiveUserCount<span class="dash-stat-of">/@UserCount</span></span>
+                    <span class="dash-stat-label">Utilisateurs actifs</span>
+                </div>
+                <div class="dash-stat-card @(DueRappelCount > 0 ? "dash-stat-card-alert" : "")">
+                    <span class="dash-stat-value">@DueRappelCount</span>
+                    <span class="dash-stat-label">Rappels en attente</span>
+                </div>
+            </div>
+        }
+
+        <div class="dash-section">
+            <div class="dash-section-header">
+                <h3 class="dash-section-title">Mes Rappels</h3>
+                <a href="/rappels" class="btn btn-outline">Voir tout</a>
+            </div>
+            @if (MyDueCount == 0)
+            {
+                <p class="dimmed">Aucun rappel en attente.</p>
+            }
+            else
+            {
+                <div class="dash-rappel-summary">
+                    @if (MyOverdueCount > 0)
+                    {
+                        <span class="badge badge-danger">@MyOverdueCount en retard</span>
+                    }
+                    @if (MyTodayCount > 0)
+                    {
+                        <span class="badge badge-info">@MyTodayCount aujourd'hui</span>
+                    }
+                </div>
+                <div class="dash-client-list">
+                    @foreach (var c in DueRappelsList)
+                    {
+                        <div class="dash-client-row" @onclick="() => OpenParcours(c.CleOpl)">
+                            <span class="dash-client-name">@c.RaisonSociale</span>
+                            <span class="dash-client-meta">@c.Ville</span>
+                            @if (c.DateRappel < DateOnly.FromDateTime(DateTime.Now))
+                            {
+                                <span class="badge badge-danger">En retard</span>
+                            }
+                            <span class="dash-client-date">@(c.DateRappel?.ToString("dd/MM/yyyy")) @(c.HeureRappel?.ToString("HH:mm"))</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="dash-section">
+            <h3 class="dash-section-title">Mes Filtres</h3>
+            @if (MyFiltres.Count == 0)
+            {
+                <p class="dimmed">Aucun filtre enregistré.</p>
+            }
+            else
+            {
+                <div class="dash-filtre-chips">
+                    @foreach (var f in MyFiltres)
+                    {
+                        <a class="dash-filtre-chip" href="@FiltreLink(f.NomFiltre)">@f.NomFiltre</a>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+</div>
+
+@code {
+    private bool Loading = true;
+    private bool IsAdmin;
+    private string? Login;
+
+    private int ClientCount;
+    private int ActiveUserCount;
+    private int UserCount;
+    private int DueRappelCount;
+
+    private int MyOverdueCount;
+    private int MyTodayCount;
+    private int MyDueCount => MyOverdueCount + MyTodayCount;
+
+    private List<FranceOptique> DueRappelsList = new();
+    private List<FiltreOperatrice> MyFiltres = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Login = await CurrentUser.GetLoginAsync();
+        IsAdmin = await CurrentUser.IsAdminAsync();
+
+        if (Login is not null)
+        {
+            var dueRappels = await RappelSvc.ListDueAsync(Login);
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            MyOverdueCount = dueRappels.Count(c => c.DateRappel < today);
+            MyTodayCount = dueRappels.Count(c => c.DateRappel == today);
+            DueRappelsList = dueRappels.Take(8).ToList();
+
+            // Same exact-match lookup Filtres Prédéfinis itself uses — a
+            // login with casing/spacing drift in filtre_operatrice (the
+            // kind of data issue just fixed for one account) would show
+            // zero filters here too, consistently with that page rather
+            // than silently working around it in just one place.
+            MyFiltres = await FiltreSvc.ListByOperatorAsync(Login);
+        }
+
+        if (IsAdmin)
+        {
+            ClientCount = await ClientSvc.CountAsync();
+            DueRappelCount = await RappelSvc.CountDueAsync();
+            var users = await UserSvc.ListAsync();
+            UserCount = users.Count;
+            ActiveUserCount = users.Count(u => u.IsActive);
+        }
+
+        Loading = false;
+    }
+
+    private void OpenParcours(long cleOpl) => Nav.NavigateTo($"/parcours-client?mode=clients&start={cleOpl}");
+
+    private string FiltreLink(string nomFiltre) =>
+        $"/filtres-predefinis?assistante={Uri.EscapeDataString(Login ?? "")}&filtre={Uri.EscapeDataString(nomFiltre)}";
+}

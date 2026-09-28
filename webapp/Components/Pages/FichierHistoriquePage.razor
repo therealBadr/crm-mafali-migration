@@ -1,7 +1,12 @@
 @page "/fichier-historique"
+@attribute [Authorize(Roles = "admin,assistant")]
 @using Microsoft.AspNetCore.Components.Web.Virtualization
 @implements IAsyncDisposable
 @inject HistoriqueService HistoriqueSvc
+@inject HistoriqueFilterService HistoFilterSvc
+@inject FiltreHistoriqueService FiltreHistoSvc
+@inject AssistanteService AssistanteSvc
+@inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -30,15 +35,23 @@
    (~33,554,428px). Capping well under that (a few thousand rows) keeps this
    page safe at any real data size without needing to reproduce that
    ceiling — past the cap, scrolling stops and the count label explains why,
-   pointing at Filtre_Historique (not yet usable — its own table is still
-   empty, pending Badr's password-blocked source file) as the intended way
-   to narrow a search that large.
+   pointing at the Filtre : picker below as the way to narrow a search that
+   large.
+
+   Filtre : now live (2026-09-02, was a permanently-disabled placeholder
+   before filtre_historique had an owner column and a builder to populate
+   it — see DefinirFiltreHistoriquePage.razor). Same Assistante-then-Filtre
+   two-step as Filtres Prédéfinis (FiltresPredefinisPage.razor): Commercial
+   is locked to their own name, Admin/Assistant can browse any operator's.
+   Selecting a filter swaps LoadedItems over to HistoFilterSvc's full
+   (non-paginated) result set and turns off "load more" — clearing it back
+   to "< Aucun >" returns to the normal keyset-paginated browse.
 
    Soft delete, not hard delete — Risk Register #13, confirmed with Badr. *@
 
 <PageTitle>Fichier des Historiques</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Table des Historiques</span>
     <div class="actions">
@@ -49,9 +62,21 @@
 </div>
 
 <div class="search-bar">
-    <label style="font-size: 13px; color: var(--header-text);">Filtre :</label>
-    <select class="search-input" style="min-width: 220px;" disabled title="En attente des données Filtre_Historique (fichier source encore verrouillé)">
-        <option>&lt; Aucun &gt;</option>
+    <label style="font-size: 13px; color: var(--color-muted-foreground);">Assistante :</label>
+    <select class="search-input" style="min-width: 180px;" value="@SelectedAssistante" disabled="@(!CanViewAll)" @onchange="OnAssistanteChange">
+        <option value="">Sélectionner…</option>
+        @foreach (var a in Assistantes)
+        {
+            <option value="@a">@a</option>
+        }
+    </select>
+    <label style="font-size: 13px; color: var(--color-muted-foreground);">Filtre :</label>
+    <select class="search-input" style="min-width: 220px;" value="@SelectedFiltreNom" disabled="@(SelectedAssistante is null)" @onchange="OnFiltreChange">
+        <option value="">&lt; Aucun &gt;</option>
+        @foreach (var f in Filtres)
+        {
+            <option value="@f.NomFiltre">@f.NomFiltre</option>
+        }
     </select>
     <span class="result-count">
         @if (LoadedItems.Count < TotalCount && !_hasMore)
@@ -75,10 +100,13 @@
         <div class="header-row" style="position: sticky; top: 0;">
             @foreach (var col in Columns)
             {
-                <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">@col.Label</div>
+                <div class="cell @Sort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])" @onclick='() => Sort.Toggle(col.Key)'>
+                    @col.Label @Sort.ArrowFor(col.Key)
+                    <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                </div>
             }
         </div>
-        <Virtualize Items="LoadedItems" Context="h" ItemSize="34">
+        <Virtualize Items="SortedItems" Context="h" ItemSize="34">
             <div class="row @(h.IdHisto == Selected ? "selected" : "")"
                  @onclick="() => Select(h.IdHisto)"
                  @ondblclick="() => OpenEditRow(h.IdHisto)">
@@ -105,6 +133,16 @@
         }
     </div>
 </div>
+<p class="count">
+    @if (LoadedItems.Count < TotalCount && !_hasMore)
+    {
+        @($"{LoadedItems.Count} sur {TotalCount} enregistrements (affichage limité — utilisez un filtre pour affiner)")
+    }
+    else
+    {
+        @($"{TotalCount} enregistrement{(TotalCount != 1 ? "s" : "")}")
+    }
+</p>
 </div>
 
 @if (ConfirmDeleteOpen)
@@ -164,7 +202,115 @@
     private bool ConfirmDeleteOpen;
     private string? Error;
 
+    private List<string> Assistantes = new();
+    private string? SelectedAssistante;
+    private List<FiltreHistorique> Filtres = new();
+    private string? SelectedFiltreNom;
+    private bool CanViewAll;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
+
+    // Sorts whatever's currently loaded, not the full underlying table —
+    // same "browse what's loaded, use Filtre to narrow for anything bigger"
+    // philosophy already behind MaxLoadedRows above. A true full-table sort
+    // would need GetPagedAsync's keyset pagination (which depends on
+    // ordering by id_histo to resume "load more" correctly) to support an
+    // arbitrary ORDER BY, which it doesn't. When a Filtre is applied,
+    // LoadedItems already holds the complete matching set (_hasMore=false),
+    // so sorting there is exact, not partial.
+    private List<Historique> SortedItems => GridSort.Apply(GridFilter.Apply(LoadedItems, Filter, GetCellText), Sort, GetCellText);
+
     protected override async Task OnInitializedAsync()
+    {
+        CanViewAll = await CurrentUser.CanViewAllFiltersAsync();
+        var currentLogin = await CurrentUser.GetLoginAsync();
+
+        try
+        {
+            Assistantes = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+
+        // Commercial can't browse anyone else's filters — same lock as
+        // Filtres Prédéfinis, load their own list immediately instead of
+        // waiting on a selection that isn't really a choice.
+        if (!CanViewAll && currentLogin is not null)
+        {
+            Assistantes = new List<string> { currentLogin };
+            await SelectAssistante(currentLogin);
+        }
+
+        await RefreshCount();
+        await LoadInitial();
+    }
+
+    private async Task OnAssistanteChange(ChangeEventArgs e)
+    {
+        var value = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString();
+        await SelectAssistante(value);
+        // Assistante changed out from under an already-applied filter —
+        // back to the normal paginated browse rather than leaving stale
+        // filtered rows on screen tied to the previous operator's list.
+        await ClearFilter();
+    }
+
+    private async Task SelectAssistante(string? assistante)
+    {
+        SelectedAssistante = assistante;
+        SelectedFiltreNom = null;
+        Filtres = new();
+        if (SelectedAssistante is null) return;
+
+        try
+        {
+            Filtres = await FiltreHistoSvc.ListByOperatorAsync(SelectedAssistante);
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    private async Task OnFiltreChange(ChangeEventArgs e)
+    {
+        var nom = e.Value?.ToString();
+        SelectedFiltreNom = string.IsNullOrEmpty(nom) ? null : nom;
+
+        if (SelectedFiltreNom is null)
+        {
+            await ClearFilter();
+            return;
+        }
+
+        var filtre = Filtres.FirstOrDefault(f => f.NomFiltre == SelectedFiltreNom);
+        if (filtre is null) return;
+
+        Error = null;
+        try
+        {
+            var (rows, count) = await HistoFilterSvc.SearchByFiltreReelAsync(filtre.FiltreReel ?? "");
+            LoadedItems = rows;
+            TotalCount = count;
+            _hasMore = false;
+            Selected = null;
+        }
+        catch (FormatException)
+        {
+            Error = "Ce filtre contient une syntaxe non reconnue et ne peut pas être exécuté pour le moment. Contactez un administrateur pour le corriger.";
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+    }
+
+    // Back to the normal keyset-paginated browse — same call OnInitializedAsync
+    // makes, just without re-deriving Assistantes/CanViewAll.
+    private async Task ClearFilter()
     {
         await RefreshCount();
         await LoadInitial();

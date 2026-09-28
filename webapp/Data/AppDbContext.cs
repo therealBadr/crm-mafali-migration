@@ -83,10 +83,13 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<FiltreHistorique>(entity =>
         {
-            entity.HasKey(e => e.NomFiltre).HasName("filtre_historique_pkey");
+            entity.HasKey(e => new { e.NomOperateur, e.NomFiltre }).HasName("filtre_historique_pkey");
 
             entity.ToTable("filtre_historique");
 
+            entity.Property(e => e.NomOperateur)
+                .HasMaxLength(50)
+                .HasColumnName("nom_operateur");
             entity.Property(e => e.NomFiltre)
                 .HasMaxLength(50)
                 .HasColumnName("nom_filtre");
@@ -225,7 +228,7 @@ public partial class AppDbContext : DbContext
                 .HasDefaultValueSql("'-1'::character varying")
                 .HasColumnName("statuts_clients");
             entity.Property(e => e.TelBis)
-                .HasMaxLength(20)
+                .HasMaxLength(60)
                 .HasColumnName("tel_bis");
             entity.Property(e => e.Telephone)
                 .HasMaxLength(20)
@@ -429,6 +432,12 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Role)
                 .HasMaxLength(20)
                 .HasColumnName("role");
+            entity.Property(e => e.FailedLoginCount)
+                .HasDefaultValue(0)
+                .HasColumnName("failed_login_count");
+            entity.Property(e => e.LockoutUntil)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("lockout_until");
         });
         modelBuilder.HasSequence("france_optique_cle_opl_seq");
 

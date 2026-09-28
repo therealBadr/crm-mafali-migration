@@ -48,11 +48,22 @@ public class FiltreOperatriceService
     // no auth yet, so the page asks the user to pick who they are first
     // (Badr's explicit stand-in until real auth/permissions land) and scopes
     // from there.
+    //
+    // Case/whitespace-insensitive match, not a strict ==: nom_operateur has
+    // no FK to users.login or assistantes.prenom_nom (free text, same as
+    // FiltreReel above) — confirmed live, 2026-09-22: a Commercial account
+    // ("Bruno") could see his own filters fine on one machine but not
+    // another, same code and same role on both, only explained by the two
+    // databases' nom_operateur values having drifted apart in case/spacing
+    // over time (hand-entered, nothing ever enforced them matching). A
+    // strict == is exactly the kind of check that silently breaks on data
+    // like that; trimming and lower-casing both sides survives it.
     public async Task<List<FiltreOperatrice>> ListByOperatorAsync(string nomOperateur)
     {
+        var needle = nomOperateur.Trim().ToLower();
         await using var db = await _dbFactory.CreateDbContextAsync();
         return await db.FiltreOperatrices
-            .Where(f => f.NomOperateur == nomOperateur)
+            .Where(f => f.NomOperateur.Trim().ToLower() == needle)
             .OrderBy(f => f.NomFiltre)
             .ToListAsync();
     }

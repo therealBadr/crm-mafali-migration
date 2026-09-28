@@ -1,10 +1,10 @@
-@page "/"
 @page "/familles"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject FamilleService FamilleSvc
 
 <PageTitle>Familles</PageTitle>
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Table des Familles</span>
     <div class="actions">
@@ -35,7 +35,10 @@ else
 {
     <div class="table-wrap">
         <div class="header-row">
-            <div class="cell">Nom de la Famille</div>
+            <div class="cell @Sort.CssClass(NameColumn)" @onclick="() => Sort.Toggle(NameColumn)">
+                Nom de la Famille @Sort.ArrowFor(NameColumn)
+                <ColumnFilterIcon Column="@NameColumn" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
         </div>
         @foreach (var name in Filtered)
         {
@@ -88,6 +91,9 @@ else
     private string SearchTerm = string.Empty;
     private bool Loading = true;
     private string? Error;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
+    private const string NameColumn = "name";
 
     private bool ModalOpen;
     private bool IsEditMode;
@@ -95,10 +101,17 @@ else
     private string? ModalError;
     private bool Submitting;
 
-    private List<string> Filtered =>
-        string.IsNullOrWhiteSpace(SearchTerm)
-            ? Names
-            : Names.Where(f => f.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+    private List<string> Filtered
+    {
+        get
+        {
+            var list = string.IsNullOrWhiteSpace(SearchTerm)
+                ? Names
+                : Names.Where(f => f.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            list = GridFilter.Apply(list, Filter, (name, _) => name);
+            return GridSort.Apply(list, Sort, (name, _) => name);
+        }
+    }
 
     protected override async Task OnInitializedAsync() => await Load();
 

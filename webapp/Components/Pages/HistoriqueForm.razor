@@ -1,5 +1,6 @@
 @page "/historiques/new"
 @page "/historiques/{IdHisto:long}/edit"
+@attribute [Authorize(Roles = "admin,assistant")]
 @inject HistoriqueService HistoriqueSvc
 @inject NavigationManager Nav
 @inject AssistanteService AssistanteSvc

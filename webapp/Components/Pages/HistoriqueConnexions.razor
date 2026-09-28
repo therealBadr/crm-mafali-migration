@@ -9,7 +9,7 @@
    #24). Successful logins only, most recent first, capped at 200 rows —
    see UserService.GetLoginHistoryAsync and database/06_login_history.sql. *@
 
-<div class="page">
+<div class="page page-flush">
 <div class="toolbar">
     <span class="title">Historique des Connexions</span>
 </div>
@@ -27,10 +27,16 @@ else
 {
     <div class="table-wrap">
         <div class="header-row">
-            <div class="cell">Login</div>
-            <div class="cell" style="flex: 0 0 200px;">Date et Heure</div>
+            <div class="cell @Sort.CssClass("login")" @onclick='() => Sort.Toggle("login")'>
+                Login @Sort.ArrowFor("login")
+                <ColumnFilterIcon Column="login" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
+            <div class="cell @Sort.CssClass("date")" style="flex: 0 0 200px;" @onclick='() => Sort.Toggle("date")'>
+                Date et Heure @Sort.ArrowFor("date")
+                <ColumnFilterIcon Column="date" Filter="Filter" OnFilterChanged="StateHasChanged" />
+            </div>
         </div>
-        @foreach (var h in Items)
+        @foreach (var h in Sorted)
         {
             <div class="row" style="cursor: default;">
                 <div class="cell">@h.Login</div>
@@ -46,6 +52,17 @@ else
     private List<LoginHistory> Items = new();
     private bool Loading = true;
     private string? Error;
+    private readonly SortState Sort = new();
+    private readonly GridFilterState Filter = new();
+
+    private List<LoginHistory> Sorted => GridSort.Apply(GridFilter.Apply(Items, Filter, GetSortText), Sort, GetSortText);
+
+    private static string GetSortText(LoginHistory h, string column) => column switch
+    {
+        "login" => h.Login ?? "",
+        "date" => h.LoggedInAt.ToString("dd/MM/yyyy HH:mm:ss"),
+        _ => "",
+    };
 
     protected override async Task OnInitializedAsync()
     {

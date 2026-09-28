@@ -1,13 +1,14 @@
 @page "/bon-commande"
 @inject BonCommandeTemplateService TemplateSvc
-@inject CurrentUserService CurrentUserSvc
 @inject IJSRuntime JS
 
-@* Two independent halves sharing one page, per Badr's explicit choice —
-   see PROGRESS.md's "Bon de Commande generation" entries for the full
-   design conversation before any of this was written:
-   - Source (admin-only): replace the two server-side .xlsx templates.
-     Backed by BonCommandeTemplateService, plain files on disk.
+@* Two independent halves sharing one page — see PROGRESS.md's "Bon de
+   Commande generation" entries for the full design conversation before
+   any of this was written:
+   - Source (everyone, since the 2026-09-04 permissions pass — was
+     admin-only before that; Commercial explicitly needs this to choose
+     which template file is in use): replace the two server-side .xlsx
+     templates. Backed by BonCommandeTemplateService, plain files on disk.
    - Destination (everyone): grant a local folder via the File System
      Access API (Chrome/Edge only — feature-detected below) so a later
      "Générer fichier bon de commande" button (Parcours Client, not
@@ -35,30 +36,27 @@
 else
 {
     <div class="bc-sections">
-        @if (IsAdmin)
-        {
-            <div class="bc-card">
-                <p class="bc-section-title">Source — Modèles (serveur)</p>
-                <div class="bc-template-row">
-                    <div class="bc-template-info">
-                        <span class="bc-template-label">Modèle BC Optique</span>
-                        <span class="dimmed">@TemplateStatusText(OptiqueInfo)</span>
-                    </div>
-                    <label class="btn btn-outline" for="bc-optique-input">Remplacer</label>
-                    <InputFile id="bc-optique-input" style="display:none"
-                               OnChange="e => HandleTemplateUpload(BonCommandeTemplateType.Optique, e)" accept=".xlsx" />
+        <div class="bc-card">
+            <p class="bc-section-title">Source — Modèles (serveur)</p>
+            <div class="bc-template-row">
+                <div class="bc-template-info">
+                    <span class="bc-template-label">Modèle BC Optique</span>
+                    <span class="dimmed">@TemplateStatusText(OptiqueInfo)</span>
                 </div>
-                <div class="bc-template-row">
-                    <div class="bc-template-info">
-                        <span class="bc-template-label">Modèle BC Revendeur</span>
-                        <span class="dimmed">@TemplateStatusText(RevendeurInfo)</span>
-                    </div>
-                    <label class="btn btn-outline" for="bc-revendeur-input">Remplacer</label>
-                    <InputFile id="bc-revendeur-input" style="display:none"
-                               OnChange="e => HandleTemplateUpload(BonCommandeTemplateType.Revendeur, e)" accept=".xlsx" />
-                </div>
+                <label class="btn btn-outline" for="bc-optique-input">Remplacer</label>
+                <InputFile id="bc-optique-input" style="display:none"
+                           OnChange="e => HandleTemplateUpload(BonCommandeTemplateType.Optique, e)" accept=".xlsx" />
             </div>
-        }
+            <div class="bc-template-row">
+                <div class="bc-template-info">
+                    <span class="bc-template-label">Modèle BC Revendeur</span>
+                    <span class="dimmed">@TemplateStatusText(RevendeurInfo)</span>
+                </div>
+                <label class="btn btn-outline" for="bc-revendeur-input">Remplacer</label>
+                <InputFile id="bc-revendeur-input" style="display:none"
+                           OnChange="e => HandleTemplateUpload(BonCommandeTemplateType.Revendeur, e)" accept=".xlsx" />
+            </div>
+        </div>
 
         <div class="bc-card">
             <p class="bc-section-title">Destination — Dossier local</p>
@@ -92,7 +90,6 @@ else
     private const long MaxTemplateFileSize = 20 * 1024 * 1024;
 
     private bool Loading = true;
-    private bool IsAdmin;
     private string? Error;
 
     private BonCommandeTemplateInfo? OptiqueInfo;
@@ -102,16 +99,12 @@ else
     private bool DestinationSupported;
     private string? DestinationFolderName;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         try
         {
-            IsAdmin = await CurrentUserSvc.IsAdminAsync();
-            if (IsAdmin)
-            {
-                OptiqueInfo = TemplateSvc.GetInfo(BonCommandeTemplateType.Optique);
-                RevendeurInfo = TemplateSvc.GetInfo(BonCommandeTemplateType.Revendeur);
-            }
+            OptiqueInfo = TemplateSvc.GetInfo(BonCommandeTemplateType.Optique);
+            RevendeurInfo = TemplateSvc.GetInfo(BonCommandeTemplateType.Revendeur);
         }
         catch (Exception ex)
         {
@@ -141,11 +134,6 @@ else
 
     private async Task HandleTemplateUpload(BonCommandeTemplateType type, InputFileChangeEventArgs e)
     {
-        // Backstop, not the real gate — the InputFile is only ever rendered
-        // for admins (IsAdmin check above), matching Clients.razor's
-        // Importer. Checked again here anyway since this is the one place
-        // that actually decides whether the file gets written.
-        if (!IsAdmin) return;
         Error = null;
         try
         {

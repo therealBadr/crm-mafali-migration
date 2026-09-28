@@ -1,0 +1,192 @@
+/* "Command Strip Workbench" — presentation only, scoped to this page. */
+
+.page {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 1px solid var(--color-workbench-border);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.toolbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.toolbar .title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.search-bar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.search-input {
+    font-family: var(--font-sans-workbench);
+    border: 1px solid var(--color-workbench-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.search-input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+    border-color: var(--color-coral);
+}
+
+.search-input:disabled {
+    background: var(--color-ink-soft);
+    color: var(--color-muted-foreground);
+}
+
+.checkbox-label {
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.btn-primary {
+    background: var(--color-coral);
+    background-image: none;
+    color: #ffffff;
+    border: none;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--color-coral);
+    filter: brightness(0.94);
+}
+
+.btn-primary:disabled {
+    background: var(--color-ink-soft);
+    color: var(--color-muted-foreground);
+    opacity: 1;
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.result-count {
+    font-family: var(--font-sans-workbench);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.header-row {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.header-row .cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    border-right: 1px solid var(--color-workbench-border);
+}
+
+.row {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-workbench-border);
+    transition: background 140ms ease;
+}
+
+.row:hover {
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-ink) 4%);
+}
+
+.row.selected {
+    background: var(--color-ink-soft);
+    box-shadow: inset 3px 0 0 var(--color-ink);
+}
+
+.row.selected:hover {
+    background: var(--color-ink-soft);
+}
+
+.cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 13px;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Same reasoning as Clients.razor.css: coral stays reserved for Bloqués
+   only, Impayés reads as neutral rather than a second "hot" state. */
+.badge-success {
+    background: var(--color-teal-2-soft);
+    color: var(--color-teal-2-strong);
+}
+
+.badge-warning {
+    background: var(--color-ink-soft);
+    color: var(--color-muted-foreground);
+}
+
+.badge-danger {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+}
+
+/* Two stacked grids (client results / that client's historique) need a
+   stronger break than a hairline once both use the same row/header
+   styling — a solid ink divider plus a label and a faint paper-vs-surface
+   background shift reads as two distinct zones at a glance. */
+.histo-pane {
+    border-top: 3px solid var(--color-ink);
+    background: var(--color-paper);
+}
+
+.histo-pane-label {
+    margin: 0;
+    padding: 8px 12px;
+    font-family: var(--font-sans-workbench);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    background: var(--color-paper);
+    flex-shrink: 0;
+}
+
+.histo-pane .header-row {
+    background: var(--color-ink-soft);
+}
+
+.histo-pane .row {
+    background: var(--color-paper);
+}
+
+.histo-pane .row:hover {
+    background: color-mix(in srgb, var(--color-paper) 94%, var(--color-ink) 6%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .row,
+    .btn,
+    .search-input {
+        transition: none !important;
+    }
+}

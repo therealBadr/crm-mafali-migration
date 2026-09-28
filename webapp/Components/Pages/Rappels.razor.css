@@ -1,0 +1,108 @@
+/* "Command Strip Workbench" — presentation only, scoped to this page. */
+
+.page {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    border: 1px solid var(--color-workbench-border);
+    font-family: var(--font-sans-workbench);
+    color: var(--color-ink);
+}
+
+.toolbar {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+    box-shadow: none;
+}
+
+.toolbar .title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-ink);
+    border-left-color: var(--color-coral);
+}
+
+.btn-outline {
+    background: var(--color-surface);
+    border: 1px solid var(--color-workbench-border);
+    color: var(--color-ink);
+}
+
+.btn-outline:hover:not(:disabled) {
+    background: var(--color-ink-soft);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-coral);
+}
+
+.alert {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    border: 1px solid var(--color-coral-soft-strong);
+}
+
+.dimmed {
+    color: var(--color-muted-foreground);
+}
+
+.header-row {
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-workbench-border);
+}
+
+.header-row .cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted-foreground);
+    border-right: 1px solid var(--color-workbench-border);
+}
+
+.row {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-workbench-border);
+    transition: background 140ms ease;
+    cursor: pointer;
+}
+
+.row:hover {
+    background: color-mix(in srgb, var(--color-surface) 96%, var(--color-ink) 4%);
+}
+
+.cell {
+    font-family: var(--font-sans-workbench);
+    font-size: 13px;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+}
+
+.count {
+    color: var(--color-muted-foreground);
+}
+
+/* The one page in the app with real urgency semantics: overdue is
+   genuinely urgent (coral, matches the brief's "priority" usage exactly),
+   due-today is active/in-motion, not urgent — teal. */
+.badge-danger {
+    background: var(--color-coral-soft);
+    color: var(--color-coral);
+    font-weight: 600;
+}
+
+.badge-info {
+    background: var(--color-teal-2-soft);
+    color: var(--color-teal-2-strong);
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .row,
+    .btn {
+        transition: none !important;
+    }
+}

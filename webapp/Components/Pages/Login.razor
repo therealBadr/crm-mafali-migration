@@ -34,9 +34,8 @@
 <div class="login-page">
     <div class="login-card">
         <div class="login-brand">
-            <div class="login-mark">M</div>
             <div>
-                <h1>Mafali CRM</h1>
+                <h1>Mafali <span class="login-suffix">CRM</span></h1>
                 <p class="login-sub">Connexion</p>
             </div>
         </div>
@@ -48,6 +47,10 @@
         else if (Error == "inactive")
         {
             <div class="alert">Ce compte est désactivé.</div>
+        }
+        else if (Error == "locked")
+        {
+            <div class="alert">Trop de tentatives échouées. Réessayez dans 15 minutes.</div>
         }
 
         <form method="post" action="login">

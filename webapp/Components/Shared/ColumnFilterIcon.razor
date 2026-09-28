@@ -1,0 +1,81 @@
+@* Per-column header search icon + inline input, backed by GridFilter.cs.
+   One line to drop into any sortable header .cell:
+   <ColumnFilterIcon Column="@key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+   Stops its own click propagation so it can sit inside a header cell that's
+   already click-to-sort (the whole .cell, or a .col-sort-label span inside
+   it) without also triggering that cell's Sort.Toggle. Extracted as a
+   component rather than repeating this markup in every header cell across
+   every grid page (~15 pages, several columns each) — same reasoning as
+   AutocompleteInput.razor being shared rather than copied per field.
+
+   OnFilterChanged is required, not optional — confirmed live (Clients.razor,
+   93,235 rows) that without it, the icon's own "filtered" state updates
+   correctly (this component re-renders itself after its own event, same as
+   any Blazor component) but the parent page's grid never does: Filter is a
+   shared *reference*, and mutating its fields from a handler that lives in
+   THIS component only schedules a re-render of THIS component, not of
+   whichever page actually owns the Virtualize/@foreach reading Filter's
+   state. The page looked completely unfiltered despite the icon visibly
+   showing "filtered" and holding the right query. Invoking a parent-owned
+   EventCallback (here, the parent's own StateHasChanged) is what actually
+   asks Blazor to re-render the *right* component.
+
+   When open, the input is an absolutely-positioned overlay with inset: 0 —
+   it fills exactly the same box as its parent .cell (which has
+   position: relative), nothing more. That's deliberately different from
+   two earlier attempts that both leaked outside the cell's own box: a
+   position: absolute popover dropped below the cell (clipped invisible by
+   the cell's own overflow: hidden — needed there for header-text ellipsis
+   truncation) and, after that, a position: fixed popover anchored via a JS
+   getBoundingClientRect() call on open (visible, but didn't track the
+   grid's own horizontal scroll, and depended on a JS round-trip completing
+   before the input was usable — Badr, 2026-09-22: "the search field need
+   to be in the column... sometime the search is not even working"). An
+   inset: 0 overlay never exceeds its parent's box, so the cell's overflow
+   never has anything to clip in the first place — no JS, no scroll
+   tracking, no clipping ancestor to fight. *@
+<span class="col-filter-icon @Filter.CssClass(Column)" @onclick="ToggleOpen" @onclick:stopPropagation="true">🔎</span>
+@if (Filter.IsOpen(Column))
+{
+    <div class="col-filter-inline" @onclick:stopPropagation="true">
+        <input type="text" placeholder="Rechercher…" value="@Filter.Query" autofocus
+               @oninput="OnInput" @onkeydown="OnKeyDown" />
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public required string Column { get; set; }
+    [Parameter, EditorRequired] public required GridFilterState Filter { get; set; }
+    [Parameter, EditorRequired] public required EventCallback OnFilterChanged { get; set; }
+
+    private async Task ToggleOpen()
+    {
+        Filter.ToggleOpen(Column);
+        await OnFilterChanged.InvokeAsync();
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        Filter.SetQuery(Column, e.Value?.ToString() ?? string.Empty);
+        await OnFilterChanged.InvokeAsync();
+    }
+
+    // Enter closes and keeps the filter applied (same as clicking the icon
+    // again); Escape clears what was typed and closes — same split as
+    // Excel's own column filter box. Neither should require reaching for
+    // the mouse.
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Enter":
+                Filter.ToggleOpen(Column);
+                await OnFilterChanged.InvokeAsync();
+                break;
+            case "Escape":
+                Filter.Cancel(Column);
+                await OnFilterChanged.InvokeAsync();
+                break;
+        }
+    }
+}

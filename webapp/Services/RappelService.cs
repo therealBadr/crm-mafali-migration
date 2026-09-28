@@ -20,14 +20,23 @@ namespace MafaliCrm.Web.Services;
 // removes a client from this list, same single write path as every other
 // FranceOptique field, not a second mechanism bolted on here.
 //
-// Deliberately no per-user (Assistante_Commerciale) filtering: real data
-// checked before building this — only 3 distinct values exist across all
-// of france_optique.assistante_commercial today, none of them clean
-// exact matches for most real user logins (case variants like "Bruno" /
-// "bruno bruno" / "Bruno Bruno"). Filtering to "my reminders" on data this
-// sparse would show most users an empty list even when real reminders
-// exist for them, which is worse than showing everyone the same shared
-// list for now.
+// Per-user (Assistante_Commerciale) filtering, added 2026-09-02 once the
+// real full data was migrated. Originally deliberately omitted — the old
+// 489-row test subset only had 3 distinct assistant values, too sparse to
+// filter meaningfully. The real data has 634 distinct values with real
+// per-person volume (hundreds of overdue reminders each for the busiest
+// assistants), so filtering is now genuinely useful, not just noise.
+//
+// Matched case-insensitively (ILIKE, no wildcards — exact match ignoring
+// case) against the logged-in user's login, not a strict ==. Real data
+// has casing/spacing inconsistencies for the same person (e.g. "Bruno" /
+// "bruno bruno" / "Bruno Bruno"); this catches the pure-casing variants,
+// though not spacing/word-count differences — a client whose assistant
+// field was typed as a genuinely different string than the login won't
+// match. Applies to every role, including admin — confirmed with Badr
+// this is intentionally different from CanViewAllFiltersAsync's
+// admin/assistant-see-all pattern used for saved filters; he wants his
+// own reminders filtered too, not a shared everyone-sees-all list.
 public class RappelService
 {
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
@@ -37,25 +46,33 @@ public class RappelService
         _dbFactory = dbFactory;
     }
 
-    public async Task<List<FranceOptique>> ListDueAsync()
+    public async Task<List<FranceOptique>> ListDueAsync(string login)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         var today = DateOnly.FromDateTime(DateTime.Now);
         return await db.FranceOptiques.AsNoTracking()
-            .Where(c => c.RappelRdv && c.DateRappel != null && c.DateRappel <= today)
+            .Where(c => c.RappelRdv && c.DateRappel != null && c.DateRappel <= today
+                        && c.AssistanteCommercial != null && EF.Functions.ILike(c.AssistanteCommercial, login))
             .OrderBy(c => c.DateRappel)
             .ThenBy(c => c.HeureRappel)
             .ToListAsync();
     }
 
-    // Backs the admin overview's "Rappels en attente" stat card — same
-    // WHERE clause as ListDueAsync, but COUNT instead of fetching full rows.
-    public async Task<int> CountDueAsync()
+    // Backs the admin overview's "Rappels en attente" stat card — a
+    // system-wide monitoring number for the admin-only "Aperçu" tab, not a
+    // personal task list, so this one deliberately stays unfiltered
+    // (login=null) even though ListDueAsync now filters per-user. Same
+    // WHERE clause otherwise, COUNT instead of fetching full rows.
+    public async Task<int> CountDueAsync(string? login = null)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         var today = DateOnly.FromDateTime(DateTime.Now);
-        return await db.FranceOptiques
-            .Where(c => c.RappelRdv && c.DateRappel != null && c.DateRappel <= today)
-            .CountAsync();
+        var query = db.FranceOptiques
+            .Where(c => c.RappelRdv && c.DateRappel != null && c.DateRappel <= today);
+        if (login is not null)
+        {
+            query = query.Where(c => c.AssistanteCommercial != null && EF.Functions.ILike(c.AssistanteCommercial, login));
+        }
+        return await query.CountAsync();
     }
 }
