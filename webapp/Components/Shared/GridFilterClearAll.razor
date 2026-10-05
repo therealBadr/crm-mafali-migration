@@ -1,0 +1,66 @@
+@* One per grid, dropped once right before the grid's own table-wrap/
+   header-row (not inside it — the header-row is a flex row whose child
+   count has to exactly match the data rows below it, same reason nothing
+   extra ever gets added directly into .header-row; see the column-
+   alignment bug in app.css's own history for why). Renders nothing at all
+   when no column filter is active, so it costs zero layout space on every
+   grid in its normal, unfiltered state.
+   <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
+
+   Was a single "✕ Effacer les filtres (N)" text link — Badr couldn't find
+   it ("I didn't find it"), which makes sense: nothing marks where it'll
+   appear until a filter's already active, and it says nothing about WHAT
+   is filtered. Rebuilt as removable chips (Excel/Airtable pattern), one
+   per active column, each naming its own column + value and carrying its
+   own ✕ — no need to reopen a column's box and hit Escape just to drop
+   one filter. "Tout effacer" only shows once there are 2+ chips, since
+   with exactly one, that chip's own ✕ already *is* "clear everything".
+
+   The outer div is ALWAYS rendered, even with zero filters (collapsed to
+   nothing visually via the -empty modifier class, not removed from the
+   DOM) — mafaliRowResize (app.js) snapshots which DOM elements belong to
+   a grid's resize group fresh on every drag and floats them together via
+   translateY. With the old version, this row only existed in the DOM
+   once Filter.HasAny — so expanding a grid *before* any filter was set
+   left it out of that drag's snapshot entirely; setting a filter
+   afterward, while the grid was still expanded, then inserted this row
+   fresh at its normal (un-transformed) position, which the already-
+   floated grid was now sitting on top of. Badr, 2026-09-28: "the filter
+   chips dont get resized... they become invisible" — exactly that.
+   Keeping the wrapper permanently in the DOM means every resize drag
+   captures it regardless of whether a filter happens to be active yet,
+   so it always carries the right offset by the time a filter actually
+   shows up inside it. *@
+<div class="grid-filter-chip-row @(Filter.HasAny ? "" : "grid-filter-chip-row-empty")">
+    @if (Filter.HasAny)
+    {
+        @foreach (var (column, label, query) in Filter.ActiveChips)
+        {
+            <span class="grid-filter-chip">
+                @label: @query
+                <span class="grid-filter-chip-remove" @onclick="() => Remove(column)">✕</span>
+            </span>
+        }
+        @if (Filter.ActiveCount > 1)
+        {
+            <button type="button" class="grid-filter-clear-all" @onclick="ClearAll">Tout effacer</button>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required GridFilterState Filter { get; set; }
+    [Parameter, EditorRequired] public required EventCallback OnFilterChanged { get; set; }
+
+    private async Task Remove(string column)
+    {
+        Filter.RemoveColumn(column);
+        await OnFilterChanged.InvokeAsync();
+    }
+
+    private async Task ClearAll()
+    {
+        Filter.ClearAll();
+        await OnFilterChanged.InvokeAsync();
+    }
+}

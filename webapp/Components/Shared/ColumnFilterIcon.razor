@@ -1,6 +1,11 @@
 @* Per-column header search icon + inline input, backed by GridFilter.cs.
    One line to drop into any sortable header .cell:
-   <ColumnFilterIcon Column="@key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+   <ColumnFilterIcon Column="@key" Label="@displayText" Filter="Filter" OnFilterChanged="StateHasChanged" />
+   Label is the human-readable header text (e.g. "Ville") — required, not
+   optional, same EditorRequired reasoning as OnFilterChanged below: it
+   backs GridFilterClearAll's chip row ("Ville: Paris ✕"), and a missed
+   call site should fail the build, not silently show the raw snake_case
+   Column key to a user.
    Stops its own click propagation so it can sit inside a header cell that's
    already click-to-sort (the whole .cell, or a .col-sort-label span inside
    it) without also triggering that cell's Sort.Toggle. Extracted as a
@@ -33,18 +38,24 @@
    to be in the column... sometime the search is not even working"). An
    inset: 0 overlay never exceeds its parent's box, so the cell's overflow
    never has anything to clip in the first place — no JS, no scroll
-   tracking, no clipping ancestor to fight. *@
+   tracking, no clipping ancestor to fight.
+
+   Any number of columns can hold an active filter at once (GridFilter.cs,
+   2026-09-28) — only the input BOX is exclusive (one open at a time, via
+   Filter.IsOpen/ToggleOpen); the underlying query per column is independent
+   and all currently-set columns AND together in GridFilter.Apply. *@
 <span class="col-filter-icon @Filter.CssClass(Column)" @onclick="ToggleOpen" @onclick:stopPropagation="true">🔎</span>
 @if (Filter.IsOpen(Column))
 {
     <div class="col-filter-inline" @onclick:stopPropagation="true">
-        <input type="text" placeholder="Rechercher…" value="@Filter.Query" autofocus
+        <input type="text" placeholder="Rechercher…" value="@Filter.QueryFor(Column)" autofocus
                @oninput="OnInput" @onkeydown="OnKeyDown" />
     </div>
 }
 
 @code {
     [Parameter, EditorRequired] public required string Column { get; set; }
+    [Parameter, EditorRequired] public required string Label { get; set; }
     [Parameter, EditorRequired] public required GridFilterState Filter { get; set; }
     [Parameter, EditorRequired] public required EventCallback OnFilterChanged { get; set; }
 
@@ -56,7 +67,7 @@
 
     private async Task OnInput(ChangeEventArgs e)
     {
-        Filter.SetQuery(Column, e.Value?.ToString() ?? string.Empty);
+        Filter.SetQuery(Column, e.Value?.ToString() ?? string.Empty, Label);
         await OnFilterChanged.InvokeAsync();
     }
 

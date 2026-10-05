@@ -224,6 +224,7 @@
 else
 {
     <p class="count" style="text-align: right;">@Count enregistrement@(Count != 1 ? "s" : "")</p>
+    <GridFilterClearAll Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap" style="overflow-x: auto;">
         <div style="@GridLayout.WrapperStyle(ResultTotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;">
@@ -231,7 +232,7 @@ else
                 {
                     <div class="cell @ResultSort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])" @onclick='() => ResultSort.Toggle(col.Key)'>
                         @col.Label @ResultSort.ArrowFor(col.Key)
-                        <ColumnFilterIcon Column="@col.Key" Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
+                        <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
                     </div>
                 }
             </div>
@@ -328,7 +329,6 @@ else
         new("date_rappel", "Date Rappel", 100),
         new("heure_rappel", "Heure Rappel", 90),
         new("note", "Note", 200),
-        new("fax", "Fax", 110),
         new("representant", "Représentant", 160),
         new("magasin_principal", "Magasin Principal", 160),
         new("statuts_clients", "Statuts Clients", 140),
@@ -456,8 +456,8 @@ else
     // already special-case that exact string (see ClientFilterService.cs
     // and FiltreReelParser.cs) since real saved filters already use SYSDATE
     // this same way. Checking the box sets the value to "SYSDATE"
-    // (swapping the date picker for a disabled placeholder, since a native
-    // <input type="date"> can't display a non-date string); unchecking
+    // (swapping the date picker for a disabled placeholder, since DateInput
+    // can't display a non-date string either); unchecking
     // clears it back to empty for a fresh pick, same as every other
     // operator-change reset in this file.
     private RenderFragment DateOrSysdateInput(RowState row, int index) =>
@@ -468,8 +468,9 @@ else
             }
             else
             {
-                <input class="text-input" type="date" style="flex: 1 1 auto; min-width: 0;" value="@row.Values[index]"
-                       @oninput="e => row.Values[index] = e.Value?.ToString() ?? string.Empty" />
+                <DateInput Style="flex: 1 1 auto; min-width: 0;"
+                           Value="@(DateOnly.TryParse(row.Values[index], out var d) ? d : null)"
+                           ValueChanged="@(v => row.Values[index] = v?.ToString("yyyy-MM-dd") ?? string.Empty)" />
             }
             <label class="checkbox-label" style="margin-bottom: 0; white-space: nowrap;"
                    title="Utilise la date du jour, recalculée à chaque exécution du filtre (SYSDATE)">
@@ -644,7 +645,6 @@ else
         "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
         "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
         "note" => c.Note ?? "",
-        "fax" => c.Fax ?? "",
         "representant" => c.Representant ?? "",
         "magasin_principal" => c.MagasinPrincipal ?? "",
         "statuts_clients" => c.StatutsClients ?? "",

@@ -1,0 +1,59 @@
+@using System.Globalization
+
+@* Replaces native <input type="time">. The native control's displayed
+   value and spinner picker are rendered by the browser per OS/user
+   locale, so on an English-locale machine it shows "09:30 AM" even
+   though the underlying value is the 24h string "09:30" — same root
+   cause as DateInput.razor's day/month/year issue (Badr, meeting
+   2026-10-05: times must read 24h everywhere, no AM/PM). This draws a
+   plain masked text input instead, so there's no native locale
+   formatting to leak through. *@
+
+<div class="time-input-wrap" style="@Style">
+    <input id="@Id" class="text-input" value="@_text" disabled="@Disabled" placeholder="hh:mm"
+           @oninput="OnTextInput" @onblur="OnBlur" autocomplete="off" />
+    <span class="time-input-icon">🕐</span>
+</div>
+
+@code {
+    [Parameter] public TimeOnly? Value { get; set; }
+    [Parameter] public EventCallback<TimeOnly?> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    private string _text = "";
+    private bool _syncInitialized;
+    private TimeOnly? _committedValue;
+
+    // Same reasoning as DateInput: track Value via _committedValue rather
+    // than comparing the Value parameter directly, so a parent re-render
+    // lagging behind ValueChanged can't stomp a keystroke in progress.
+    protected override void OnParametersSet()
+    {
+        if (_syncInitialized && Value == _committedValue) return;
+        _committedValue = Value;
+        _text = Value?.ToString("HH:mm") ?? "";
+        _syncInitialized = true;
+    }
+
+    private async Task OnTextInput(ChangeEventArgs e)
+    {
+        var digits = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());
+        if (digits.Length > 4) digits = digits[..4];
+
+        _text = digits.Length <= 2 ? digits : $"{digits[..2]}:{digits[2..]}";
+
+        if (digits.Length == 4 &&
+            TimeOnly.TryParseExact(_text, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            _committedValue = parsed;
+            await ValueChanged.InvokeAsync(parsed);
+        }
+    }
+
+    private void OnBlur()
+    {
+        _text = _committedValue?.ToString("HH:mm") ?? "";
+    }
+}

@@ -33,23 +33,24 @@
 }
 else
 {
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap">
         <div class="header-row">
             <div class="cell @Sort.CssClass("nom")" @onclick='() => Sort.Toggle("nom")'>
                 Prénom Nom @Sort.ArrowFor("nom")
-                <ColumnFilterIcon Column="nom" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="nom" Label="Prénom Nom" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("service")" @onclick='() => Sort.Toggle("service")'>
                 Service @Sort.ArrowFor("service")
-                <ColumnFilterIcon Column="service" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="service" Label="Service" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("acces")" style="flex: 0 0 160px;" @onclick='() => Sort.Toggle("acces")'>
                 Accès à tous les Filtres @Sort.ArrowFor("acces")
-                <ColumnFilterIcon Column="acces" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="acces" Label="Accès à tous les Filtres" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("commentaire")" @onclick='() => Sort.Toggle("commentaire")'>
                 Commentaire @Sort.ArrowFor("commentaire")
-                <ColumnFilterIcon Column="commentaire" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="commentaire" Label="Commentaire" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
         </div>
         @foreach (var a in Filtered)

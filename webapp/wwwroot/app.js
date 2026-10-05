@@ -268,6 +268,99 @@ window.mafaliRowResize = {
         const TOPBAR_HEIGHT = 64;
         let nextGridId = 0;
 
+        // An expanded grid is `position: fixed` and floats over whatever
+        // used to be above it, covering some of it — but nothing about
+        // that changes any ancestor's own scroll room, so if the covered
+        // content wasn't already scrollable (the normal case: a grid page
+        // fits exactly, only the grid itself scrolls internally), there's
+        // nothing to scroll INTO to reveal what's now hidden underneath.
+        // Badr, 2026-09-28: "the area above it should remain scrollable or
+        // become scrollable... so we can scroll down and see the things
+        // that are hidden".
+        //
+        // Four things that look reasonable here and confirmed NOT to
+        // work, so don't re-try them:
+        // - padding-bottom on .app-body (MainLayout.razor.css's real
+        //   scroll container, the 100vh/overflow:hidden .app-shell's
+        //   inner overflow-y:auto child): tested directly, had zero
+        //   effect on .app-body.scrollHeight even at 300px — some
+        //   combination of its flex-column/min-height:0/overflow:auto
+        //   setup just doesn't count a scroll container's own trailing
+        //   padding toward its scrollHeight here.
+        // - a spacer appended as .app-body's last child (sibling of
+        //   .page): .page-flush carries a negative margin on all sides
+        //   (app.css, bleeds content edge-to-edge against .app-body's own
+        //   padding) — confirmed live that negative margin pulls a
+        //   trailing sibling up into it, silently eating most of the
+        //   spacer's contribution.
+        // - a spacer appended INSIDE .page: .page itself is
+        //   `height: 100%; overflow: hidden` (app.css) — a grid page is
+        //   meant to fit exactly and clip, managing its own scroll
+        //   entirely internally (.table-wrap's own overflow: auto). That
+        //   overflow: hidden silently swallows anything that doesn't fit,
+        //   including the spacer — confirmed live, .app-body.scrollHeight
+        //   never budged no matter how tall the spacer got, because .page
+        //   clipped it before .app-body ever saw it.
+        // - a NORMAL FLOW spacer (plain block, participates in flex
+        //   layout) appended as the page root's last child: works for
+        //   pages using the plain .page class, but Parcours Client and
+        //   Recherche Client use their own page-specific root classes
+        //   (.pc-page / .rc-page, not .page — see PAGE_ROOT_SELECTOR
+        //   below) which both also contain a *separate* flex: 1;
+        //   min-height: 0 scrollable panel above the grid (.pc-body-wrap,
+        //   the identity/contact form) as a sibling of .grid-group-start
+        //   and the grid itself. A flex-flow spacer competes with THAT
+        //   panel for space — every time the spacer grows, flexbox
+        //   shrinks the panel to compensate, which shifts
+        //   .grid-group-start's natural (pre-transform) position. Since
+        //   the drag's translateY offset is computed once at drag-start
+        //   and never re-measures that natural position, the two drift
+        //   apart continuously for as long as the drag continues. Badr,
+        //   2026-09-28, live repro: "the rectangle that holds the
+        //   buttons... didn't stick to the grid, a distance keeps forming
+        //   as i keep resizing" — exactly this.
+        // What actually works: position: absolute, anchored to the page
+        // container's own bottom edge (top: 100%) instead of sitting in
+        // normal flow — it still extends the container's scrollable
+        // bounds (position: absolute descendants count toward
+        // scrollHeight same as anything else), but an absolutely
+        // positioned element is completely outside flex distribution, so
+        // it can never cause any sibling to resize, at any point during
+        // the drag.
+        const overages = new Map();
+        let scrollSpacer = null;
+        let scrollPage = null;
+
+        // Every real page's root card plays the same role .page does
+        // (clip-to-fit, manage its own scroll) under a page-specific name
+        // — add to this list if a future page introduces another one;
+        // falling through to .app-body silently targets the wrong
+        // container instead of failing loudly, which is exactly how this
+        // bug happened the first time.
+        const PAGE_ROOT_SELECTOR = '.page, .pc-page, .rc-page';
+
+        function updateScrollSpacer(pageEl) {
+            if (!scrollPage) {
+                scrollPage = pageEl;
+                // Left set once applied, even after the spacer shrinks back
+                // to 0 — position: relative with no offset is visually
+                // inert, and reverting it would need tracking yet another
+                // original value for no real benefit.
+                if (getComputedStyle(scrollPage).position === 'static') {
+                    scrollPage.style.position = 'relative';
+                }
+            }
+            if (!scrollSpacer) {
+                scrollSpacer = document.createElement('div');
+                scrollSpacer.className = 'resize-scroll-spacer';
+                scrollPage.appendChild(scrollSpacer);
+            }
+            let total = 0;
+            overages.forEach((v) => { total += v; });
+            scrollSpacer.style.height = total + 'px';
+            scrollPage.style.overflowY = total > 0 ? 'auto' : '';
+        }
+
         // Walks backward from a `.table-wrap` collecting every sibling
         // above it (skipping any handle/placeholder already inserted),
         // stopping at — and including — the first `.grid-group-start` it
@@ -297,6 +390,24 @@ window.mafaliRowResize = {
                     el.remove();
                 }
             });
+            // A grid can be removed (page navigation) while still mid-
+            // expansion — its own overage would otherwise linger forever,
+            // permanently reserving scroll room nothing still needs. Blazor
+            // navigation also typically replaces .page wholesale, so
+            // scrollSpacer/scrollPage themselves go stale the same way —
+            // dropped here rather than reused, so the next grid to expand
+            // (on whatever page is now showing) creates fresh ones instead
+            // of touching detached nodes.
+            overages.forEach((_, id) => {
+                if (!document.querySelector('.table-wrap[data-grid-id="' + id + '"]')) {
+                    overages.delete(id);
+                }
+            });
+            if (scrollPage && !document.body.contains(scrollPage)) {
+                overages.clear();
+                scrollSpacer = null;
+                scrollPage = null;
+            }
             document.querySelectorAll('.table-wrap').forEach((tableWrap) => {
                 if (tableWrap.dataset.gridId) return;
                 const id = 'g' + (nextGridId++);
@@ -458,6 +569,8 @@ window.mafaliRowResize = {
                 target.dataset.standardTop = standardTarget.top;
                 placeholder.style.display = 'block';
                 positionHandle(handle, standardTarget, newGroupTop);
+                overages.set(target.dataset.gridId, -offset);
+                updateScrollSpacer(target.closest(PAGE_ROOT_SELECTOR) || document.querySelector('.app-body'));
             } else {
                 group.forEach((el) => {
                     if (el === target) return;
@@ -472,6 +585,8 @@ window.mafaliRowResize = {
                 target.dataset.expanded = '0';
                 placeholder.style.display = 'none';
                 resetHandle(handle);
+                overages.delete(target.dataset.gridId);
+                updateScrollSpacer(target.closest(PAGE_ROOT_SELECTOR) || document.querySelector('.app-body'));
             }
         }
 

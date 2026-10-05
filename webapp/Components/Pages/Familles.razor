@@ -33,11 +33,12 @@
 }
 else
 {
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap">
         <div class="header-row">
             <div class="cell @Sort.CssClass(NameColumn)" @onclick="() => Sort.Toggle(NameColumn)">
                 Nom de la Famille @Sort.ArrowFor(NameColumn)
-                <ColumnFilterIcon Column="@NameColumn" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="@NameColumn" Label="Nom de la Famille" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
         </div>
         @foreach (var name in Filtered)

@@ -75,7 +75,6 @@ public class ClientFilterService
         new("telephone", "Téléphone", FieldType.Text),
         new("tel_bis", "Téléphone Bis", FieldType.Text),
         new("portable", "Portable", FieldType.Text),
-        new("fax", "Fax", FieldType.Text),
         new("email", "Email", FieldType.Text),
         new("assistante_commercial", "Assistante Commerciale", FieldType.Text),
         new("responsable_achat", "Responsable Achat", FieldType.Text),
@@ -118,7 +117,6 @@ public class ClientFilterService
         ["telephone"] = "Telephone",
         ["tel_bis"] = "TelBis",
         ["portable"] = "Portable",
-        ["fax"] = "Fax",
         ["email"] = "Email",
         ["assistante_commercial"] = "AssistanteCommercial",
         ["responsable_achat"] = "ResponsableAchat",
@@ -194,7 +192,6 @@ public class ClientFilterService
         ["telephone"] = "Telephone",
         ["tel_bis"] = "Tel_Bis",
         ["portable"] = "Portable",
-        ["fax"] = "Fax",
         ["email"] = "Email",
         ["assistante_commercial"] = "Assistante_Commerciale",
         ["responsable_achat"] = "Responsable_Achat",
@@ -330,7 +327,6 @@ public class ClientFilterService
             "portable" => db.FranceOptiques.Select(c => c.Portable),
             "tel_bis" => db.FranceOptiques.Select(c => c.TelBis),
             "email" => db.FranceOptiques.Select(c => c.Email),
-            "fax" => db.FranceOptiques.Select(c => c.Fax),
             "assistante_commercial" => db.FranceOptiques.Select(c => c.AssistanteCommercial),
             "responsable_achat" => db.FranceOptiques.Select(c => c.ResponsableAchat),
             "note" => db.FranceOptiques.Select(c => c.Note),
@@ -370,7 +366,9 @@ public class ClientFilterService
         // Different fields still always AND together, unchanged.
         foreach (var fieldGroup in conditions.GroupBy(c => c.Field))
         {
-            query = ApplyFieldConditions(query, fieldGroup.ToList());
+            query = fieldGroup.Key == FranchiseAnyField
+                ? ApplyFranchiseAnyConditions(query, fieldGroup.ToList())
+                : ApplyFieldConditions(query, fieldGroup.ToList());
         }
 
         var rows = await query.OrderBy(c => c.CleOpl).ToListAsync();
@@ -391,6 +389,39 @@ public class ClientFilterService
             .OrderBy(c => c.CleOpl)
             .ToListAsync();
         return (rows, rows.Count);
+    }
+
+    // Recherche Client's 4 Franchise boxes (Badr, 2026-09-28): a filled box
+    // should match if its value appears in ANY of the client's 4 real
+    // franchise columns, not just its own same-numbered one — so it no
+    // longer matters which of the four slots a client's franchise happens
+    // to be recorded under. Multiple filled boxes combine via OR (confirmed:
+    // a client with EITHER value anywhere across their 4 columns matches,
+    // including a client that has both).
+    //
+    // Deliberately not a real entry in the public Fields list — it isn't a
+    // real column, and has no business showing up in Définir un Filtre's
+    // generic field picker (DefinirFiltrePage.razor, the only other place
+    // that enumerates Fields). Only RechercheClientPage's own
+    // BuildConditions() ever constructs a Condition with this Field value.
+    public const string FranchiseAnyField = "franchise_any";
+
+    private static readonly string[] FranchiseProps = { "Franchise", "Franchise2", "Franchise3", "Franchise4" };
+
+    private static IQueryable<FranceOptique> ApplyFranchiseAnyConditions(IQueryable<FranceOptique> query, List<Condition> conditions)
+    {
+        var args = new List<object>();
+        var valueClauses = new List<string>();
+
+        foreach (var c in conditions)
+        {
+            var idx = args.Count;
+            args.Add(CastValue(FieldType.Text, c.Values[0]));
+            var perColumn = FranchiseProps.Select(p => OperatorTemplate(p, Operator.Eq, $"@{idx}", FieldType.Text, args));
+            valueClauses.Add($"({string.Join(" || ", perColumn)})");
+        }
+
+        return query.Where(string.Join(" || ", valueClauses), args.ToArray());
     }
 
     // Applies every Condition already known to share one Field as a single

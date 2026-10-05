@@ -173,27 +173,28 @@
     }
     else
     {
+        <GridFilterClearAll Filter="UserFilter" OnFilterChanged="StateHasChanged" />
         <div class="table-wrap">
             <div class="header-row">
                 <div class="cell @UserSort.CssClass("login")" @onclick='() => UserSort.Toggle("login")'>
                     Login @UserSort.ArrowFor("login")
-                    <ColumnFilterIcon Column="login" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                    <ColumnFilterIcon Column="login" Label="Login" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
                 </div>
                 <div class="cell @UserSort.CssClass("role")" style="flex: 0 0 140px;" @onclick='() => UserSort.Toggle("role")'>
                     Rôle @UserSort.ArrowFor("role")
-                    <ColumnFilterIcon Column="role" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                    <ColumnFilterIcon Column="role" Label="Rôle" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
                 </div>
                 <div class="cell @UserSort.CssClass("statut")" style="flex: 0 0 120px;" @onclick='() => UserSort.Toggle("statut")'>
                     Statut @UserSort.ArrowFor("statut")
-                    <ColumnFilterIcon Column="statut" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                    <ColumnFilterIcon Column="statut" Label="Statut" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
                 </div>
                 <div class="cell @UserSort.CssClass("mdp")" style="flex: 0 0 140px;" @onclick='() => UserSort.Toggle("mdp")'>
                     Mot de passe @UserSort.ArrowFor("mdp")
-                    <ColumnFilterIcon Column="mdp" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                    <ColumnFilterIcon Column="mdp" Label="Mot de passe" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
                 </div>
                 <div class="cell @UserSort.CssClass("derniere")" style="flex: 0 0 160px;" @onclick='() => UserSort.Toggle("derniere")'>
                     Dernière connexion @UserSort.ArrowFor("derniere")
-                    <ColumnFilterIcon Column="derniere" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
+                    <ColumnFilterIcon Column="derniere" Label="Dernière connexion" Filter="UserFilter" OnFilterChanged="StateHasChanged" />
                 </div>
             </div>
             @foreach (var u in SortedUsers)

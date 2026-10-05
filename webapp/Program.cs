@@ -116,6 +116,7 @@ builder.Services.AddScoped<CaService>();
 builder.Services.AddScoped<ClientImportExportService>();
 builder.Services.AddScoped<RappelService>();
 builder.Services.AddScoped<BonCommandeTemplateService>();
+builder.Services.AddScoped<BonCommandeEnCoursService>();
 
 var app = builder.Build();
 

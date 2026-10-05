@@ -34,23 +34,24 @@
 }
 else
 {
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap">
         <div class="header-row">
             <div class="cell @Sort.CssClass("id")" style="flex: 0 0 70px;" @onclick='() => Sort.Toggle("id")'>
                 Identifiant @Sort.ArrowFor("id")
-                <ColumnFilterIcon Column="id" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="id" Label="Identifiant" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("nom")" @onclick='() => Sort.Toggle("nom")'>
                 Nom Pays @Sort.ArrowFor("nom")
-                <ColumnFilterIcon Column="nom" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="nom" Label="Nom Pays" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("indicatif")" @onclick='() => Sort.Toggle("indicatif")'>
                 Indicatif @Sort.ArrowFor("indicatif")
-                <ColumnFilterIcon Column="indicatif" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="indicatif" Label="Indicatif" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("masque")" @onclick='() => Sort.Toggle("masque")'>
                 Masque N° Téléphone @Sort.ArrowFor("masque")
-                <ColumnFilterIcon Column="masque" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="masque" Label="Masque N° Téléphone" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
         </div>
         @foreach (var p in Filtered)

@@ -1,20 +1,19 @@
-@page "/rappels"
-@inject RappelService RappelSvc
+@page "/bon-commande-en-cours"
+@inject BonCommandeEnCoursService BonCommandeSvc
 @inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
 
-@* New screen, not a legacy port — the closest legacy equivalent is
-   Fen_Rappel (module 8), but that window's own query (REQ_RappelRDV) is an
-   exact Date_Rappel = today match with no overdue rollup, a documented
-   shortcoming rather than a design worth reproducing. See RappelService.cs
-   for the actual query and the per-user filtering reasoning (added
-   2026-09-02) — not repeated here. *@
+@* "Voir tout" target for the dashboard's "Bon de commande en cours"
+   section — same grid/sort/filter shape as Rappels.razor, just a
+   different query (BonCommandeEnCoursService: StatusVente == "Vente
+   (Bon de Commande)", per-user). No legacy equivalent — this status
+   previously had no dedicated per-assistant worklist at all. *@
 
-<PageTitle>Rappels</PageTitle>
+<PageTitle>Bon de Commande en cours</PageTitle>
 
 <div class="page page-flush">
 <div class="toolbar">
-    <span class="title">Rappels</span>
+    <span class="title">Bon de Commande en cours</span>
     <div class="actions">
         <button class="btn btn-outline" @onclick="Load">Actualiser</button>
     </div>
@@ -31,7 +30,7 @@
 }
 else if (Items.Count == 0)
 {
-    <p class="dimmed">Aucun rappel en attente.</p>
+    <p class="dimmed">Aucun bon de commande en cours.</p>
 }
 else
 {
@@ -53,29 +52,14 @@ else
                     @foreach (var col in Columns)
                     {
                         <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
-                            @if (col.Key == "date_rappel")
-                            {
-                                @c.DateRappel!.Value.ToString("dd/MM/yyyy")
-                                @if (c.DateRappel!.Value < Today)
-                                {
-                                    <span class="badge badge-danger" style="margin-left: 6px;">En retard</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-info" style="margin-left: 6px;">Aujourd'hui</span>
-                                }
-                            }
-                            else
-                            {
-                                @GetCellText(c, col.Key)
-                            }
+                            @GetCellText(c, col.Key)
                         </div>
                     }
                 </div>
             }
         </div>
     </div>
-    <p class="count">@Items.Count rappel@(Items.Count != 1 ? "s" : "") en attente</p>
+    <p class="count">@Items.Count bon@(Items.Count != 1 ? "s" : "") de commande en cours</p>
 }
 </div>
 
@@ -84,8 +68,8 @@ else
 
     private readonly List<ColumnDef> Columns = new()
     {
-        new("date_rappel", "Date Rappel", 200),
-        new("heure_rappel", "Heure Rappel", 90),
+        new("date_saisie", "Date Saisie", 200),
+        new("heure_saisie", "Heure Saisie", 90),
         new("cle_opl", "Cle Opl", 80),
         new("raison_sociale", "Raison Sociale", 220),
         new("assistante_commercial", "Assistante Commerciale", 180),
@@ -98,7 +82,6 @@ else
     private List<FranceOptique> Items = new();
     private bool Loading = true;
     private string? Error;
-    private DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
     private readonly SortState Sort = new();
     private readonly GridFilterState Filter = new();
 
@@ -112,7 +95,7 @@ else
         try
         {
             var login = await CurrentUser.GetLoginAsync();
-            Items = login is null ? new() : await RappelSvc.ListDueAsync(login);
+            Items = login is null ? new() : await BonCommandeSvc.ListAsync(login);
             Error = null;
         }
         catch (Exception ex)
@@ -129,8 +112,8 @@ else
 
     private static string GetCellText(FranceOptique c, string key) => key switch
     {
-        "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
-        "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
+        "date_saisie" => c.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "heure_saisie" => c.HeureSaisie?.ToString("HH:mm") ?? "",
         "cle_opl" => c.CleOpl.ToString(),
         "raison_sociale" => c.RaisonSociale ?? "",
         "assistante_commercial" => c.AssistanteCommercial ?? "",

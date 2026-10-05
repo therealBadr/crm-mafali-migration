@@ -1,0 +1,19 @@
+.time-input-wrap {
+    position: relative;
+}
+
+.time-input-wrap .text-input {
+    padding-right: 30px;
+}
+
+.time-input-icon {
+    position: absolute;
+    top: 0;
+    right: 8px;
+    bottom: 10px;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    pointer-events: none;
+    opacity: 0.6;
+}

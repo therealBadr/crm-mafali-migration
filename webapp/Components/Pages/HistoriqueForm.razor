@@ -52,16 +52,14 @@
             </select>
 
             <label for="f-datesaisie">Date de Saisie</label>
-            <input id="f-datesaisie" class="text-input" type="date" value="@(Input.DateSaisie?.ToString("yyyy-MM-dd"))"
-                   @onchange="e => Input.DateSaisie = ParseDate(e.Value?.ToString())" />
+            <DateInput Id="f-datesaisie" Value="Input.DateSaisie" ValueChanged="v => Input.DateSaisie = v" />
 
             <label for="f-operation">Opération</label>
             <input id="f-operation" class="text-input" maxlength="50" value="@Input.Operation"
                    @oninput="e => Input.Operation = e.Value?.ToString()" />
 
             <label for="f-heuresaisie">Heure de Saisie</label>
-            <input id="f-heuresaisie" class="text-input" type="time" value="@(Input.HeureSaisie?.ToString("HH:mm"))"
-                   @onchange="e => Input.HeureSaisie = ParseTime(e.Value?.ToString())" />
+            <TimeInput Id="f-heuresaisie" Value="Input.HeureSaisie" ValueChanged="v => Input.HeureSaisie = v" />
 
             <label for="f-statusvente">Status Vente</label>
             <input id="f-statusvente" class="text-input" maxlength="50" value="@Input.StatusVente"
@@ -72,12 +70,10 @@
                    @oninput="e => Input.Note = e.Value?.ToString()" />
 
             <label for="f-daterappel">Date de Rappel</label>
-            <input id="f-daterappel" class="text-input" type="date" value="@(Input.DateRappel?.ToString("yyyy-MM-dd"))"
-                   @onchange="e => Input.DateRappel = ParseDate(e.Value?.ToString())" />
+            <DateInput Id="f-daterappel" Value="Input.DateRappel" ValueChanged="v => Input.DateRappel = v" />
 
             <label for="f-heurerappel">Heure de Rappel</label>
-            <input id="f-heurerappel" class="text-input" type="time" value="@(Input.HeureRappel?.ToString("HH:mm"))"
-                   @onchange="e => Input.HeureRappel = ParseTime(e.Value?.ToString())" />
+            <TimeInput Id="f-heurerappel" Value="Input.HeureRappel" ValueChanged="v => Input.HeureRappel = v" />
 
             <label for="f-franchise">Franchise</label>
             <select id="f-franchise" class="text-input" value="@(Input.Franchise ?? "")"
@@ -283,12 +279,8 @@
         Nav.NavigateTo("/fichier-historique", forceLoad: true);
     }
 
-    // TryParse, not Parse — these run directly inside inline @onchange/@oninput
-    // lambdas with no surrounding try/catch, so a malformed value (unlikely
-    // given the browser's native date/time pickers constrain input, but not
-    // impossible) must fail silently here rather than throwing and crashing
-    // the whole Blazor circuit.
+    // TryParse, not Parse — this runs directly inside an inline @oninput
+    // lambda with no surrounding try/catch, so a malformed value must fail
+    // silently here rather than throwing and crashing the whole Blazor circuit.
     private static long? ParseLong(string? s) => long.TryParse(s, out var v) ? v : null;
-    private static DateOnly? ParseDate(string? s) => DateOnly.TryParse(s, out var v) ? v : null;
-    private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var v) ? v : null;
 }

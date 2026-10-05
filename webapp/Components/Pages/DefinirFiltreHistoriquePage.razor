@@ -196,6 +196,7 @@
 else
 {
     <p class="count" style="text-align: right;">@Count enregistrement@(Count != 1 ? "s" : "")</p>
+    <GridFilterClearAll Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap" style="overflow-x: auto;">
         <div style="@GridLayout.WrapperStyle(ResultTotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;">
@@ -203,7 +204,7 @@ else
                 {
                     <div class="cell @ResultSort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == ResultColumns[^1])" @onclick='() => ResultSort.Toggle(col.Key)'>
                         @col.Label @ResultSort.ArrowFor(col.Key)
-                        <ColumnFilterIcon Column="@col.Key" Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
+                        <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="ResultFilter" OnFilterChanged="StateHasChanged" />
                     </div>
                 }
             </div>

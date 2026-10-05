@@ -133,8 +133,6 @@ public class ClientImportExportService
             ToText = c => c.TelBis ?? "", FromText = (c, v) => c.TelBis = Blank(v) },
         new() { Header = "Portable",
             ToText = c => c.Portable ?? "", FromText = (c, v) => c.Portable = Blank(v) },
-        new() { Header = "Fax",
-            ToText = c => c.Fax ?? "", FromText = (c, v) => c.Fax = Blank(v) },
         new() { Header = "Email",
             ToText = c => c.Email ?? "", FromText = (c, v) => c.Email = Blank(v) },
         new() { Header = "Assistante Commerciale", ReferenceGroup = "Assistante",

@@ -25,15 +25,16 @@
 }
 else
 {
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap">
         <div class="header-row">
             <div class="cell @Sort.CssClass("login")" @onclick='() => Sort.Toggle("login")'>
                 Login @Sort.ArrowFor("login")
-                <ColumnFilterIcon Column="login" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="login" Label="Login" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("date")" style="flex: 0 0 200px;" @onclick='() => Sort.Toggle("date")'>
                 Date et Heure @Sort.ArrowFor("date")
-                <ColumnFilterIcon Column="date" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="date" Label="Date et Heure" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
         </div>
         @foreach (var h in Sorted)

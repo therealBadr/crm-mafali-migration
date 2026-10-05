@@ -78,6 +78,7 @@
 }
 else
 {
+    <GridFilterClearAll Filter="ClientFilter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap" style="flex: 3 1 0; overflow-x: auto;">
         <div style="width: 100%; min-width: @(ClientTotalWidth)px;">
             <div class="header-row" style="position: sticky; top: 0;" @ref="ClientHeaderRowRef">
@@ -85,7 +86,7 @@ else
                 {
                     <div class="cell" style="@ColStyle(col, ClientColumns)">
                         <span class="col-sort-label @ClientSort.CssClass(col.Key)" @onclick='() => ClientSort.Toggle(col.Key)'>@col.Label @ClientSort.ArrowFor(col.Key)</span>
-                        <ColumnFilterIcon Column="@col.Key" Filter="ClientFilter" OnFilterChanged="StateHasChanged" />
+                        <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="ClientFilter" OnFilterChanged="StateHasChanged" />
                         <span class="col-resize-handle" data-col-key="@col.Key"></span>
                     </div>
                 }
@@ -112,6 +113,7 @@ else
         </div>
     </div>
 
+    <GridFilterClearAll Filter="HistoFilter" OnFilterChanged="StateHasChanged" />
     <div class="histo-pane table-wrap" style="flex: 2 1 0; min-height: 0; display: flex; flex-direction: column; overflow: auto;">
         <p class="histo-pane-label">Historique du client sélectionné</p>
         <div style="width: 100%; min-width: @(HistoTotalWidth)px;">
@@ -120,7 +122,7 @@ else
                 {
                     <div class="cell" style="@ColStyle(col, HistoColumns)">
                         <span class="col-sort-label @HistoSort.CssClass(col.Key)" @onclick='() => HistoSort.Toggle(col.Key)'>@col.Label @HistoSort.ArrowFor(col.Key)</span>
-                        <ColumnFilterIcon Column="@col.Key" Filter="HistoFilter" OnFilterChanged="StateHasChanged" />
+                        <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="HistoFilter" OnFilterChanged="StateHasChanged" />
                         <span class="col-resize-handle" data-col-key="@col.Key"></span>
                     </div>
                 }
@@ -191,7 +193,6 @@ else
         new("date_rappel", "Date Rappel", 100),
         new("heure_rappel", "Heure Rappel", 90),
         new("note", "Note", 200),
-        new("fax", "Fax", 110),
         new("representant", "Représentant", 160),
         new("magasin_principal", "Magasin Principal", 160),
         new("statuts_clients", "Statuts Clients", 140),
@@ -509,7 +510,6 @@ else
         "date_rappel" => c.DateRappel?.ToString("dd/MM/yyyy") ?? "",
         "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
         "note" => c.Note ?? "",
-        "fax" => c.Fax ?? "",
         "representant" => c.Representant ?? "",
         "magasin_principal" => c.MagasinPrincipal ?? "",
         "statuts_clients" => c.StatutsClients ?? "",

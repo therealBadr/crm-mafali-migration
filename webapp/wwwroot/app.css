@@ -511,6 +511,35 @@ h1:focus {
     min-height: 0;
 }
 
+/* mafaliRowResize (app.js) — appended once inside a grid page's own root
+   card (.page/.pc-page/.rc-page) and grown/shrunk to match however much
+   any currently-expanded grid inside it is overgrown by, so that card
+   actually has somewhere to scroll INTO to reveal content a floated grid
+   is covering, even on pages where nothing was scrollable before.
+
+   position: absolute (anchored to the page container's own bottom edge
+   via top: 100%, which is why app.js gives that container
+   position: relative) rather than a normal-flow block — confirmed live
+   that a normal-flow spacer competing for space in the same flex
+   container as a page's own flex: 1 scrollable panel (e.g. Parcours
+   Client's .pc-body-wrap) made that panel shrink every time the spacer
+   grew, which visibly dragged the resize-group's action row out of sync
+   with the grid it's supposed to track (Badr, 2026-09-28: "a distance
+   keeps forming as i keep resizing"). Absolutely positioned content still
+   counts toward its containing block's scrollHeight, so this still
+   achieves the actual goal (extra scroll room) without being able to
+   perturb any sibling's size at all. Plain JS-created element, not part
+   of any .razor markup, so it lives here in the unscoped stylesheet
+   rather than a scoped .razor.css — same reasoning as every other
+   JS-managed class on this page (.table-wrap-resize-handle above,
+   .col-resize-ghost elsewhere). */
+.resize-scroll-spacer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+}
+
 .header-row {
     display: flex;
     background: var(--header-strong-bg);
@@ -642,6 +671,76 @@ h1:focus {
 .col-filter-inline input:focus {
     outline: none;
     border-color: var(--teal);
+}
+
+/* GridFilterClearAll.razor — sits in normal flow right above the grid it
+   belongs to, never inside .header-row itself. Chip colors reuse
+   .badge-teal's own tokens (var(--row-selected) bg / #0e7490 text) rather
+   than inventing a new palette — same "active filter" meaning the teal
+   filter-icon state already carries elsewhere on these grids. */
+.grid-filter-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border-light);
+}
+
+/* Kept in the DOM (not removed via @if) even with zero active filters, so
+   mafaliRowResize's resize-group snapshot always includes it — see the
+   component's own doc comment. Collapsed to take up no visible space
+   until a filter actually exists. */
+.grid-filter-chip-row-empty {
+    padding: 0;
+    border-bottom: none;
+    min-height: 0;
+}
+
+.grid-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--row-selected);
+    color: #0e7490;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 3px 6px 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.grid-filter-chip-remove {
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 1;
+}
+
+.grid-filter-chip-remove:hover {
+    background: rgba(14, 116, 144, 0.15);
+}
+
+.grid-filter-clear-all {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--navy);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    text-decoration: underline;
+    margin-left: 4px;
+}
+
+.grid-filter-clear-all:hover {
+    color: var(--teal);
 }
 
 .row {

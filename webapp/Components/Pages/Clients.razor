@@ -52,6 +52,7 @@
 }
 else
 {
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap" style="overflow-x: auto;">
         <div style="@GridLayout.WrapperStyle(TotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;" @ref="HeaderRowRef">
@@ -59,7 +60,7 @@ else
                 {
                     <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
                         <span class="col-sort-label @Sort.CssClass(col.Key)" @onclick='() => Sort.Toggle(col.Key)'>@col.Label @Sort.ArrowFor(col.Key)</span>
-                        <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                        <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="Filter" OnFilterChanged="StateHasChanged" />
                         <span class="col-resize-handle" data-col-key="@col.Key"></span>
                     </div>
                 }
@@ -170,7 +171,6 @@ else
         new("pays", "Pays", 120),
         new("telephone", "Telephone", 110),
         new("portable", "Portable", 110),
-        new("fax", "Fax", 110),
         new("email", "Email", 180),
         new("assistante_commercial", "Assistante Commerciale", 180),
         new("magasin_principal", "Magasin Principal", 160),
@@ -489,7 +489,6 @@ else
         "pays" => c.Pays ?? "",
         "telephone" => c.Telephone ?? "",
         "portable" => c.Portable ?? "",
-        "fax" => c.Fax ?? "",
         "email" => c.Email ?? "",
         "assistante_commercial" => c.AssistanteCommercial ?? "",
         "magasin_principal" => c.MagasinPrincipal ?? "",

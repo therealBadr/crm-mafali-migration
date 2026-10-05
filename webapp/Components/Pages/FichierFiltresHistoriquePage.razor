@@ -47,19 +47,20 @@
 }
 else
 {
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="table-wrap">
         <div class="header-row">
             <div class="cell @Sort.CssClass("operateur")" style="flex: 0 0 180px;" @onclick='() => Sort.Toggle("operateur")'>
                 Opérateur @Sort.ArrowFor("operateur")
-                <ColumnFilterIcon Column="operateur" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="operateur" Label="Opérateur" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("filtre")" style="flex: 0 0 220px;" @onclick='() => Sort.Toggle("filtre")'>
                 Nom du Filtre @Sort.ArrowFor("filtre")
-                <ColumnFilterIcon Column="filtre" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="filtre" Label="Nom du Filtre" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
             <div class="cell @Sort.CssClass("reel")" @onclick='() => Sort.Toggle("reel")'>
                 Filtre Réel @Sort.ArrowFor("reel")
-                <ColumnFilterIcon Column="reel" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                <ColumnFilterIcon Column="reel" Label="Filtre Réel" Filter="Filter" OnFilterChanged="StateHasChanged" />
             </div>
         </div>
         @foreach (var f in Filtered)

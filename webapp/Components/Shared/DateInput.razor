@@ -1,0 +1,152 @@
+@using System.Globalization
+
+@* Replaces native <input type="date">. The native picker's own popup
+   calendar is browser/OS chrome — nothing in HTML or CSS can reorder it —
+   so on an English-locale machine it renders month-first regardless of
+   what this app does (Badr, meeting 2026-10-05: dates must read
+   day-month-year everywhere). This draws the calendar itself in Razor, no
+   JS, same approach as AutocompleteInput.razor.
+
+   Calendar buttons (prev/next month, day cells, the toggle icon) select on
+   onmousedown + preventDefault, not onclick — same reasoning as
+   AutocompleteInput's suggestion list: preventDefault on mousedown stops
+   the browser's default focus-shift to the clicked element, so the text
+   input never blurs and OnBlur's "close + snap back" never races the
+   click. Only genuine outside clicks (or tabbing away) reach OnBlur. *@
+
+<div class="date-input-wrap" style="@Style">
+    <input id="@Id" class="text-input" value="@_text" disabled="@Disabled" placeholder="jj/mm/aaaa"
+           @oninput="OnTextInput" @onblur="OnBlur" @onkeydown="OnKeyDown" autocomplete="off" />
+    <button type="button" class="date-input-toggle" tabindex="-1" disabled="@Disabled"
+            @onmousedown="ToggleCalendar" @onmousedown:preventDefault="true">📅</button>
+
+    @if (ShowCalendar)
+    {
+        <div class="date-input-calendar">
+            <div class="date-input-cal-header">
+                <button type="button" @onmousedown="PrevMonth" @onmousedown:preventDefault="true">‹</button>
+                <span>@MonthNames[_calendarMonth.Month - 1] @_calendarMonth.Year</span>
+                <button type="button" @onmousedown="NextMonth" @onmousedown:preventDefault="true">›</button>
+            </div>
+            <div class="date-input-cal-grid">
+                @foreach (var dow in DowLabels)
+                {
+                    <span class="date-input-cal-dow">@dow</span>
+                }
+                @foreach (var d in CalendarDays())
+                {
+                    var day = d;
+                    <button type="button"
+                            class="date-input-cal-day
+                                   @(day == _committedValue ? "date-input-cal-day-selected" : "")
+                                   @(day.Month != _calendarMonth.Month ? "date-input-cal-day-outside" : "")
+                                   @(day == Today ? "date-input-cal-day-today" : "")"
+                            @onmousedown="() => SelectDate(day)" @onmousedown:preventDefault="true">
+                        @day.Day
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public DateOnly? Value { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    private static readonly string[] MonthNames =
+    {
+        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+    };
+    private static readonly string[] DowLabels = { "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim" };
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private string _text = "";
+    private bool _syncInitialized;
+    private DateOnly? _committedValue;
+    private bool ShowCalendar;
+    private DateOnly _calendarMonth = Today;
+
+    // Tracks Value via _committedValue rather than comparing against the
+    // Value parameter directly: ValueChanged updates the parent's bound
+    // field, but the parent doesn't always re-render before the next
+    // keystroke, so comparing straight against Value could re-sync _text
+    // from a not-yet-updated parameter and stomp what was just typed.
+    protected override void OnParametersSet()
+    {
+        if (_syncInitialized && Value == _committedValue) return;
+        _committedValue = Value;
+        _text = Value?.ToString("dd/MM/yyyy") ?? "";
+        var anchor = Value ?? Today;
+        _calendarMonth = new DateOnly(anchor.Year, anchor.Month, 1);
+        _syncInitialized = true;
+    }
+
+    private async Task OnTextInput(ChangeEventArgs e)
+    {
+        var digits = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());
+        if (digits.Length > 8) digits = digits[..8];
+
+        var masked = new System.Text.StringBuilder();
+        for (var i = 0; i < digits.Length; i++)
+        {
+            masked.Append(digits[i]);
+            if ((i == 1 || i == 3) && i != digits.Length - 1) masked.Append('/');
+        }
+        _text = masked.ToString();
+
+        if (digits.Length == 8 &&
+            DateOnly.TryParseExact(_text, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            _committedValue = parsed;
+            _calendarMonth = new DateOnly(parsed.Year, parsed.Month, 1);
+            await ValueChanged.InvokeAsync(parsed);
+        }
+    }
+
+    private void OnBlur()
+    {
+        ShowCalendar = false;
+        _text = _committedValue?.ToString("dd/MM/yyyy") ?? "";
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") ShowCalendar = false;
+    }
+
+    private void ToggleCalendar()
+    {
+        if (Disabled) return;
+        ShowCalendar = !ShowCalendar;
+        if (ShowCalendar)
+        {
+            var anchor = _committedValue ?? Today;
+            _calendarMonth = new DateOnly(anchor.Year, anchor.Month, 1);
+        }
+    }
+
+    private void PrevMonth() => _calendarMonth = _calendarMonth.AddMonths(-1);
+    private void NextMonth() => _calendarMonth = _calendarMonth.AddMonths(1);
+
+    private async Task SelectDate(DateOnly d)
+    {
+        _committedValue = d;
+        _text = d.ToString("dd/MM/yyyy");
+        ShowCalendar = false;
+        await ValueChanged.InvokeAsync(d);
+    }
+
+    // Monday-first 6-week grid (French convention), including the
+    // adjacent-month days needed to fill the first/last rows.
+    private IEnumerable<DateOnly> CalendarDays()
+    {
+        var dow = ((int)_calendarMonth.DayOfWeek + 6) % 7;
+        var start = _calendarMonth.AddDays(-dow);
+        for (var i = 0; i < 42; i++) yield return start.AddDays(i);
+    }
+}

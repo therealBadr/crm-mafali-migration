@@ -2,6 +2,7 @@
 @inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
 @inject RappelService RappelSvc
+@inject BonCommandeEnCoursService BonCommandeSvc
 @inject ClientService ClientSvc
 @inject FiltreOperatriceService FiltreSvc
 @inject UserService UserSvc
@@ -90,6 +91,30 @@ else
         </div>
 
         <div class="dash-section">
+            <div class="dash-section-header">
+                <h3 class="dash-section-title">Bon de commande en cours</h3>
+                <a href="/bon-commande-en-cours" class="btn btn-outline">Voir tout</a>
+            </div>
+            @if (BonCommandeList.Count == 0)
+            {
+                <p class="dimmed">Aucun bon de commande en cours.</p>
+            }
+            else
+            {
+                <div class="dash-client-list">
+                    @foreach (var c in BonCommandeList)
+                    {
+                        <div class="dash-client-row" @onclick="() => OpenParcours(c.CleOpl)">
+                            <span class="dash-client-name">@c.RaisonSociale</span>
+                            <span class="dash-client-meta">@c.Ville</span>
+                            <span class="dash-client-date">@(c.DateSaisie?.ToString("dd/MM/yyyy"))</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="dash-section">
             <h3 class="dash-section-title">Mes Filtres</h3>
             @if (MyFiltres.Count == 0)
             {
@@ -124,6 +149,7 @@ else
     private int MyDueCount => MyOverdueCount + MyTodayCount;
 
     private List<FranceOptique> DueRappelsList = new();
+    private List<FranceOptique> BonCommandeList = new();
     private List<FiltreOperatrice> MyFiltres = new();
 
     protected override async Task OnInitializedAsync()
@@ -138,6 +164,8 @@ else
             MyOverdueCount = dueRappels.Count(c => c.DateRappel < today);
             MyTodayCount = dueRappels.Count(c => c.DateRappel == today);
             DueRappelsList = dueRappels.Take(8).ToList();
+
+            BonCommandeList = (await BonCommandeSvc.ListAsync(Login)).Take(8).ToList();
 
             // Same exact-match lookup Filtres Prédéfinis itself uses — a
             // login with casing/spacing drift in filtre_operatrice (the

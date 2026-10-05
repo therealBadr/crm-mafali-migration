@@ -188,15 +188,9 @@
                     <AutocompleteInput @bind-Value="Input.Portable" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("portable", p)' />
                 </div>
             </div>
-            <div class="rc-field-row">
-                <div class="rc-field" style="flex: 1;">
-                    <label>Telephone bis :</label>
-                    <AutocompleteInput @bind-Value="Input.TelBis" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("tel_bis", p)' />
-                </div>
-                <div class="rc-field" style="flex: 1;">
-                    <label>Fax :</label>
-                    <AutocompleteInput @bind-Value="Input.Fax" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("fax", p)' />
-                </div>
+            <div class="rc-field">
+                <label>Telephone bis :</label>
+                <AutocompleteInput @bind-Value="Input.TelBis" SuggestFunc='p => ClientFilterSvc.SuggestValuesAsync("tel_bis", p)' />
             </div>
             <div class="rc-field">
                 <label>Adresse Email :</label>
@@ -236,10 +230,11 @@
                     <select class="text-input" value="@(Input.StatusVente ?? "")"
                             @onchange="e => Input.StatusVente = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
                         <option value="">Tous</option>
-                        <option value="Devis en cours">Devis en cours</option>
-                        <option value="Vente (BAT Signé)">Vente (BAT Signé)</option>
-                        <option value="Vente (BAT Original)">Vente (BAT Original)</option>
-                        <option value="Vente (Bon de Commande)">Vente (Bon de Commande)</option>
+                        <option value="Devis en cours">Devis</option>
+                        <option value="Vente (BAT Original)">BAT</option>
+                        <option value="Vente (BAT Signé)">BAT livré</option>
+                        <option value="Vente (Bon de Commande)">Bon de commande</option>
+                        <option value="Livré">Livré</option>
                         <option value="Vente Annulée">Vente Annulée</option>
                     </select>
                 </div>
@@ -247,25 +242,21 @@
             <div class="rc-field-row">
                 <div class="rc-field" style="flex: 1;">
                     <label>Date Saisie :</label>
-                    <input class="text-input" type="date" value="@(Input.DateSaisie?.ToString("yyyy-MM-dd"))"
-                           @onchange="e => Input.DateSaisie = ParseDate(e.Value?.ToString())" />
+                    <DateInput Value="Input.DateSaisie" ValueChanged="v => Input.DateSaisie = v" />
                 </div>
                 <div class="rc-field" style="flex: 1;">
                     <label>Heure Saisie :</label>
-                    <input class="text-input" type="time" value="@(Input.HeureSaisie?.ToString("HH:mm"))"
-                           @onchange="e => Input.HeureSaisie = ParseTime(e.Value?.ToString())" />
+                    <TimeInput Value="Input.HeureSaisie" ValueChanged="v => Input.HeureSaisie = v" />
                 </div>
             </div>
             <div class="rc-field-row">
                 <div class="rc-field" style="flex: 1;">
                     <label>Date Rappel :</label>
-                    <input class="text-input" type="date" value="@(Input.DateRappel?.ToString("yyyy-MM-dd"))"
-                           @onchange="e => Input.DateRappel = ParseDate(e.Value?.ToString())" />
+                    <DateInput Value="Input.DateRappel" ValueChanged="v => Input.DateRappel = v" />
                 </div>
                 <div class="rc-field" style="flex: 1;">
                     <label>Heure Rappel :</label>
-                    <input class="text-input" type="time" value="@(Input.HeureRappel?.ToString("HH:mm"))"
-                           @onchange="e => Input.HeureRappel = ParseTime(e.Value?.ToString())" />
+                    <TimeInput Value="Input.HeureRappel" ValueChanged="v => Input.HeureRappel = v" />
                 </div>
             </div>
             <div class="rc-field-row">
@@ -313,6 +304,7 @@
         <span class="rc-count">@Results.Count enregistrement@(Results.Count != 1 ? "s" : "")</span>
     </div>
 
+    <GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
     <div class="rc-results table-wrap">
         <div style="@GridLayout.WrapperStyle(TotalWidth)">
             <div class="header-row" style="position: sticky; top: 0;" @ref="HeaderRowRef">
@@ -320,7 +312,7 @@
                 {
                     <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
                         <span class="col-sort-label @Sort.CssClass(col.Key)" @onclick='() => Sort.Toggle(col.Key)'>@col.Label @Sort.ArrowFor(col.Key)</span>
-                        <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                        <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="Filter" OnFilterChanged="StateHasChanged" />
                         <span class="col-resize-handle" data-col-key="@col.Key"></span>
                     </div>
                 }
@@ -430,7 +422,6 @@
         public string? Telephone { get; set; }
         public string? Portable { get; set; }
         public string? TelBis { get; set; }
-        public string? Fax { get; set; }
         public string? Email { get; set; }
         public string? AssistanteCommercial { get; set; }
         public string? ResponsableAchat { get; set; }
@@ -687,10 +678,14 @@
         AddEq("famille", Input.Famille);
         AddText("raison_sociale", Input.RaisonSociale);
         AddText("complement", Input.Complement);
-        AddEq("franchise", Input.Franchise);
-        AddEq("franchise2", Input.Franchise2);
-        AddEq("franchise3", Input.Franchise3);
-        AddEq("franchise4", Input.Franchise4);
+        // Each of the 4 Franchise boxes matches against ANY of the client's
+        // 4 real franchise columns, not just its own same-numbered slot —
+        // see ClientFilterService.ApplyFranchiseAnyConditions for why this
+        // goes through a dedicated Field key instead of franchise/2/3/4.
+        AddEq(ClientFilterService.FranchiseAnyField, Input.Franchise);
+        AddEq(ClientFilterService.FranchiseAnyField, Input.Franchise2);
+        AddEq(ClientFilterService.FranchiseAnyField, Input.Franchise3);
+        AddEq(ClientFilterService.FranchiseAnyField, Input.Franchise4);
         AddText("rue", Input.Rue);
         AddText("localisation_1", Input.Localisation1);
         AddText("localisation_2", Input.Localisation2);
@@ -702,7 +697,6 @@
         AddText("telephone", Input.Telephone);
         AddText("portable", Input.Portable);
         AddText("tel_bis", Input.TelBis);
-        AddText("fax", Input.Fax);
         AddText("email", Input.Email);
         AddEq("assistante_commercial", Input.AssistanteCommercial);
         AddText("responsable_achat", Input.ResponsableAchat);
@@ -746,7 +740,6 @@
         Input.Telephone = c.Telephone;
         Input.Portable = c.Portable;
         Input.TelBis = c.TelBis;
-        Input.Fax = c.Fax;
         Input.Email = c.Email;
         Input.AssistanteCommercial = c.AssistanteCommercial;
         Input.ResponsableAchat = c.ResponsableAchat;
@@ -876,7 +869,6 @@
             if (!string.IsNullOrWhiteSpace(Input.Telephone)) patch.Telephone = Input.Telephone;
             if (!string.IsNullOrWhiteSpace(Input.Portable)) patch.Portable = Input.Portable;
             if (!string.IsNullOrWhiteSpace(Input.TelBis)) patch.TelBis = Input.TelBis;
-            if (!string.IsNullOrWhiteSpace(Input.Fax)) patch.Fax = Input.Fax;
             if (!string.IsNullOrWhiteSpace(Input.Email)) patch.Email = Input.Email;
             if (!string.IsNullOrWhiteSpace(Input.AssistanteCommercial)) patch.AssistanteCommercial = Input.AssistanteCommercial;
             if (!string.IsNullOrWhiteSpace(Input.ResponsableAchat)) patch.ResponsableAchat = Input.ResponsableAchat;
@@ -913,9 +905,6 @@
             Submitting = false;
         }
     }
-
-    private static DateOnly? ParseDate(string? s) => DateOnly.TryParse(s, out var v) ? v : null;
-    private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var v) ? v : null;
 
     private static string GetCellText(FranceOptique c, string key) => key switch
     {

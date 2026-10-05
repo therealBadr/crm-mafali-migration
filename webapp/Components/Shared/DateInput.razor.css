@@ -1,0 +1,108 @@
+.date-input-wrap {
+    position: relative;
+}
+
+.date-input-wrap .text-input {
+    padding-right: 34px;
+}
+
+.date-input-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    /* .text-input carries its own margin-bottom: 10px — match it here so
+       the button's clickable area lines up with the input box itself,
+       not the margin below it. */
+    bottom: 10px;
+    width: 30px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.date-input-toggle:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.date-input-calendar {
+    position: absolute;
+    top: calc(100% - 4px);
+    left: 0;
+    z-index: 20;
+    background: #ffffff;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 14px rgba(11, 35, 64, 0.15);
+    padding: 8px;
+    width: 220px;
+}
+
+.date-input-cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--text-body);
+}
+
+.date-input-cal-header button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 15px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: var(--text-body);
+}
+
+.date-input-cal-header button:hover {
+    background: var(--row-hover);
+}
+
+.date-input-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.date-input-cal-dow {
+    font-size: 10px;
+    text-align: center;
+    color: var(--header-text);
+    padding-bottom: 2px;
+}
+
+.date-input-cal-day {
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    padding: 4px 0;
+    cursor: pointer;
+    border-radius: 3px;
+    color: var(--text-body);
+}
+
+.date-input-cal-day:hover {
+    background: var(--row-hover);
+}
+
+.date-input-cal-day-outside {
+    color: var(--header-text);
+    opacity: 0.5;
+}
+
+.date-input-cal-day-today {
+    box-shadow: inset 0 0 0 1px var(--teal);
+}
+
+.date-input-cal-day-selected {
+    background: var(--teal);
+    color: #ffffff;
+}

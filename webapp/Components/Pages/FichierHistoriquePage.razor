@@ -95,6 +95,7 @@
     <div class="alert">@Error</div>
 }
 
+<GridFilterClearAll Filter="Filter" OnFilterChanged="StateHasChanged" />
 <div class="table-wrap" style="overflow-x: auto;" @ref="TableWrapRef">
     <div style="@GridLayout.WrapperStyle(TotalWidth)">
         <div class="header-row" style="position: sticky; top: 0;">
@@ -102,7 +103,7 @@
             {
                 <div class="cell @Sort.CssClass(col.Key)" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])" @onclick='() => Sort.Toggle(col.Key)'>
                     @col.Label @Sort.ArrowFor(col.Key)
-                    <ColumnFilterIcon Column="@col.Key" Filter="Filter" OnFilterChanged="StateHasChanged" />
+                    <ColumnFilterIcon Column="@col.Key" Label="@col.Label" Filter="Filter" OnFilterChanged="StateHasChanged" />
                 </div>
             }
         </div>

@@ -355,6 +355,16 @@
     background: var(--header-bg);
 }
 
+/* Voir le Fichier Stocké / Générer fichier bon de commande / Télécharger à
+   nouveau — pulled to the far right, separate from Annuler/Appliquer/
+   Fermer, via margin-left: auto on this wrapper eating the row's leftover
+   flex space. */
+.pc-actions-right {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
 /* Was 260px — Badr/Bruno feedback after real testing: this fixed-height
    strip was eating space the main edit form above needed more, for more
    rows of history than anyone actually scans in one sitting. 160px keeps

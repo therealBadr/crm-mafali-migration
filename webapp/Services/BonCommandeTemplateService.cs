@@ -118,7 +118,7 @@ public class BonCommandeTemplateService
     // untouched, still undecided. The big title (merged C1:L4) used to get
     // the franchise too — Badr moved that to E6 instead and said the title
     // itself "should stay like that", so C1 is no longer touched at all.
-    public async Task<byte[]> FillAsync(byte[] templateBytes, FranceOptique client, BonCommandeTemplateType type)
+    public async Task<(byte[] Bytes, long BcNumber)> FillAsync(byte[] templateBytes, FranceOptique client, BonCommandeTemplateType type)
     {
         var bcNumber = await GetNextBonCommandeNumberAsync();
 
@@ -137,7 +137,7 @@ public class BonCommandeTemplateService
 
         using var output = new MemoryStream();
         workbook.SaveAs(output);
-        return output.ToArray();
+        return (output.ToArray(), bcNumber);
     }
 
     private static void FillOptique(IXLWorksheet sheet, FranceOptique client, long bcNumber)
