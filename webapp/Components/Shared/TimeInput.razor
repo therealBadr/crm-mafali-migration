@@ -12,7 +12,48 @@
 <div class="time-input-wrap" style="@Style">
     <input id="@Id" class="text-input" value="@_text" disabled="@Disabled" placeholder="hh:mm"
            @oninput="OnTextInput" @onblur="OnBlur" autocomplete="off" />
-    <span class="time-input-icon">🕐</span>
+    @if (EnableTzFeature)
+    {
+        <button type="button" class="time-input-icon time-input-icon-btn" tabindex="-1"
+                @onclick="ToggleTzPopup">🕐</button>
+
+        @if (ShowTzPopup)
+        {
+            @* A transparent full-page backdrop, not mousedown/preventDefault
+               tricks — the popup now holds real text inputs that need to
+               receive focus normally (click into them, tab between them),
+               which rules out the "never let focus leave" trick DateInput's
+               calendar uses (that only works because none of its buttons
+               need to hold keyboard focus themselves). Clicking inside the
+               popup is caught by its own stopPropagation; anything else
+               reaches the backdrop and closes it. *@
+            <div class="time-input-tz-backdrop" @onclick="() => ShowTzPopup = false"></div>
+            <div class="time-input-tz-popup" @onclick:stopPropagation="true">
+                <div class="time-input-tz-header">Heure par Pays</div>
+                @if (TzToggleEnabled)
+                {
+                    <div class="time-input-tz-row">
+                        <span class="time-input-tz-zone">@HomeLabel</span>
+                        <input class="time-input-tz-field" value="@_text" placeholder="hh:mm"
+                               @oninput="OnTextInput" @onblur="OnBlur" />
+                    </div>
+                    <div class="time-input-tz-row">
+                        <span class="time-input-tz-zone">@CompareLabel</span>
+                        <input class="time-input-tz-field" value="@_compareText" placeholder="hh:mm"
+                               @oninput="OnCompareTextInput" @onblur="OnCompareBlur" />
+                    </div>
+                }
+                else
+                {
+                    <div class="time-input-tz-message">@TzBlockedReason</div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        <span class="time-input-icon">🕐</span>
+    }
 </div>
 
 @code {
@@ -22,38 +63,153 @@
     [Parameter] public string? Id { get; set; }
     [Parameter] public string? Style { get; set; }
 
+    // The timezone popup is a second, synced way to set the same Value —
+    // not a read-only preview (Badr, 2026-10-05: the first cut was
+    // view-only and that missed the point entirely). Editing the Pays row
+    // sets Value directly, same as the main input. Editing the Maroc row
+    // converts what was typed back into the Pays' local time before
+    // setting Value, using PairedDate to pick the correct offset (the
+    // Home/Maroc gap isn't constant year-round — DST, Morocco's Ramadan
+    // pause — so a specific date is required, not just "today").
+    // EnableTzFeature is a separate flag, not inferred from the timezone
+    // parameters below being non-null — those legitimately come back null
+    // for a client with no Pays set or an unconfigured country, and that's
+    // still a case this feature should explain (via TzBlockedReason), not
+    // silently disappear for. Pages never wired into this feature at all
+    // (HistoriqueForm, the Recherche Client filter) simply never pass it,
+    // so they keep the plain decorative icon from before.
+    [Parameter] public bool EnableTzFeature { get; set; }
+    [Parameter] public string? HomeTimezone { get; set; }
+    [Parameter] public string? HomeLabel { get; set; }
+    [Parameter] public string? CompareTimezone { get; set; }
+    [Parameter] public string? CompareLabel { get; set; }
+    [Parameter] public DateOnly? PairedDate { get; set; }
+
+    // Deliberately NOT gated on Value — the whole point of this popup is to
+    // let someone type a first Heure Rappel here, in either row, so it
+    // can't require one to already exist. Only Pays (HomeTimezone) and
+    // Date Rappel (PairedDate) are real prerequisites: both come from
+    // outside this field and can't be fixed by typing an hour.
+    private bool TzToggleEnabled =>
+        PairedDate is not null &&
+        !string.IsNullOrEmpty(HomeTimezone) && !string.IsNullOrEmpty(CompareTimezone);
+
+    private string TzBlockedReason
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(HomeTimezone)) return "Fuseau horaire inconnu pour ce Pays.";
+            if (PairedDate is null) return "Veuillez saisir une date.";
+            return "Fuseau horaire de comparaison indisponible.";
+        }
+    }
+
+    private bool ShowTzPopup;
+    private void ToggleTzPopup() => ShowTzPopup = !ShowTzPopup;
+
+    private TimeOnly ConvertHomeToCompare(TimeOnly homeTime)
+    {
+        var homeTz = TimeZoneInfo.FindSystemTimeZoneById(HomeTimezone!);
+        var compareTz = TimeZoneInfo.FindSystemTimeZoneById(CompareTimezone!);
+        var localDateTime = PairedDate!.Value.ToDateTime(homeTime);
+        var homeOffset = homeTz.GetUtcOffset(localDateTime);
+        var converted = TimeZoneInfo.ConvertTime(new DateTimeOffset(localDateTime, homeOffset), compareTz);
+        return TimeOnly.FromDateTime(converted.DateTime);
+    }
+
+    private TimeOnly ConvertCompareToHome(TimeOnly compareTime)
+    {
+        var homeTz = TimeZoneInfo.FindSystemTimeZoneById(HomeTimezone!);
+        var compareTz = TimeZoneInfo.FindSystemTimeZoneById(CompareTimezone!);
+        var localDateTime = PairedDate!.Value.ToDateTime(compareTime);
+        var compareOffset = compareTz.GetUtcOffset(localDateTime);
+        var converted = TimeZoneInfo.ConvertTime(new DateTimeOffset(localDateTime, compareOffset), homeTz);
+        return TimeOnly.FromDateTime(converted.DateTime);
+    }
+
+    private static string MaskDigitsToTime(string raw, out int digitCount)
+    {
+        var digits = new string(raw.Where(char.IsDigit).ToArray());
+        if (digits.Length > 4) digits = digits[..4];
+        digitCount = digits.Length;
+        return digits.Length <= 2 ? digits : $"{digits[..2]}:{digits[2..]}";
+    }
+
+    private static bool TryParseExactTime(string masked, out TimeOnly result) =>
+        TimeOnly.TryParseExact(masked, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
+
     private string _text = "";
     private bool _syncInitialized;
     private TimeOnly? _committedValue;
+
+    private string _compareText = "";
+    private TimeOnly? _compareSyncedFrom;
+
+    // Keeps the Maroc row following whatever the Pays side currently is,
+    // except right when the Maroc row itself just drove that change (see
+    // OnCompareTextInput) — otherwise every keystroke there would get its
+    // own display immediately overwritten by the round-trip conversion.
+    private void SyncCompareDisplay()
+    {
+        if (!TzToggleEnabled)
+        {
+            _compareText = "";
+            _compareSyncedFrom = null;
+            return;
+        }
+        if (_compareSyncedFrom == _committedValue) return;
+        _compareSyncedFrom = _committedValue;
+        _compareText = _committedValue is null ? "" : ConvertHomeToCompare(_committedValue.Value).ToString("HH:mm");
+    }
 
     // Same reasoning as DateInput: track Value via _committedValue rather
     // than comparing the Value parameter directly, so a parent re-render
     // lagging behind ValueChanged can't stomp a keystroke in progress.
     protected override void OnParametersSet()
     {
-        if (_syncInitialized && Value == _committedValue) return;
-        _committedValue = Value;
-        _text = Value?.ToString("HH:mm") ?? "";
-        _syncInitialized = true;
+        if (!_syncInitialized || Value != _committedValue)
+        {
+            _committedValue = Value;
+            _text = Value?.ToString("HH:mm") ?? "";
+            _syncInitialized = true;
+        }
+        SyncCompareDisplay();
     }
 
     private async Task OnTextInput(ChangeEventArgs e)
     {
-        var digits = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());
-        if (digits.Length > 4) digits = digits[..4];
+        _text = MaskDigitsToTime(e.Value?.ToString() ?? "", out var digitCount);
 
-        _text = digits.Length <= 2 ? digits : $"{digits[..2]}:{digits[2..]}";
-
-        if (digits.Length == 4 &&
-            TimeOnly.TryParseExact(_text, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        if (digitCount == 4 && TryParseExactTime(_text, out var parsed))
         {
             _committedValue = parsed;
+            SyncCompareDisplay();
             await ValueChanged.InvokeAsync(parsed);
+        }
+    }
+
+    private async Task OnCompareTextInput(ChangeEventArgs e)
+    {
+        _compareText = MaskDigitsToTime(e.Value?.ToString() ?? "", out var digitCount);
+
+        if (digitCount == 4 && TzToggleEnabled && TryParseExactTime(_compareText, out var compareParsed))
+        {
+            var convertedHome = ConvertCompareToHome(compareParsed);
+            _committedValue = convertedHome;
+            _text = convertedHome.ToString("HH:mm");
+            _compareSyncedFrom = convertedHome;
+            await ValueChanged.InvokeAsync(convertedHome);
         }
     }
 
     private void OnBlur()
     {
         _text = _committedValue?.ToString("HH:mm") ?? "";
+    }
+
+    private void OnCompareBlur()
+    {
+        _compareSyncedFrom = null;
+        SyncCompareDisplay();
     }
 }

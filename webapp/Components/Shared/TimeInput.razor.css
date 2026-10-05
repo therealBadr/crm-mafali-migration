@@ -14,6 +14,78 @@
     display: flex;
     align-items: center;
     font-size: 13px;
-    pointer-events: none;
     opacity: 0.6;
+}
+
+span.time-input-icon {
+    pointer-events: none;
+}
+
+.time-input-icon-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.time-input-tz-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: transparent;
+}
+
+.time-input-tz-popup {
+    position: absolute;
+    top: calc(100% - 4px);
+    right: 0;
+    z-index: 20;
+    background: #ffffff;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 14px rgba(11, 35, 64, 0.15);
+    padding: 8px;
+    width: 190px;
+}
+
+.time-input-tz-header {
+    font-size: 12px;
+    color: var(--header-text);
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.time-input-tz-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-body);
+}
+
+.time-input-tz-row + .time-input-tz-row {
+    border-top: 1px solid var(--border-light);
+}
+
+.time-input-tz-zone {
+    color: var(--header-text);
+}
+
+.time-input-tz-field {
+    width: 64px;
+    border: 1px solid var(--border-light);
+    border-radius: 3px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    padding: 2px 4px;
+    color: var(--text-body);
+}
+
+.time-input-tz-message {
+    font-size: 11px;
+    color: var(--text-body);
+    text-align: center;
 }

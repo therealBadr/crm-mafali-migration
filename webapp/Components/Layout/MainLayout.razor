@@ -31,7 +31,7 @@
                             <div class="nav-dropdown-panel">
                                 @foreach (var item in FichierItems)
                                 {
-                                    <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
+                                    <NavLink href="@item.Href" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active" target="_blank">
                                         @item.Label
                                     </NavLink>
                                 }
@@ -42,7 +42,7 @@
                                            not duplicated, so no separate nav entry for it
                                            anymore. Mon Compte itself is already reachable
                                            from the account menu on the right. *@
-                                        <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active">
+                                        <NavLink href="/historique-connexions" class="nav-dropdown-item" ActiveClass="nav-dropdown-item-active" target="_blank">
                                             Historique des Connexions
                                         </NavLink>
                                     </Authorized>
@@ -54,24 +54,24 @@
             </AuthorizeView>
             <AuthorizeView Roles="admin,assistant">
                 <Authorized>
-                    <NavLink href="/definir-filtre" class="nav-link" ActiveClass="nav-link-active">
+                    <NavLink href="/definir-filtre" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                         Définir un Filtre
                     </NavLink>
-                    <NavLink href="/definir-filtre-historique" class="nav-link" ActiveClass="nav-link-active">
+                    <NavLink href="/definir-filtre-historique" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                         Définir un Filtre Historique
                     </NavLink>
                 </Authorized>
             </AuthorizeView>
-            <NavLink href="/filtres-predefinis" class="nav-link" ActiveClass="nav-link-active">
+            <NavLink href="/filtres-predefinis" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                 Filtres Prédéfinis
             </NavLink>
             <NavLink href="/recherche-client" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                 Rechercher un Client
             </NavLink>
-            <NavLink href="/rappels" class="nav-link" ActiveClass="nav-link-active">
+            <NavLink href="/rappels" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                 Rappels
             </NavLink>
-            <NavLink href="/bon-commande" class="nav-link" ActiveClass="nav-link-active">
+            <NavLink href="/bon-commande" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                 Bon de Commande
             </NavLink>
             @* Was a "Nouveau" button on Parcours Client itself — moved here
@@ -82,7 +82,7 @@
                would just get denied on the page it points to. *@
             <AuthorizeView Roles="admin,assistant">
                 <Authorized>
-                    <NavLink href="/clients/new" class="nav-link" ActiveClass="nav-link-active">
+                    <NavLink href="/clients/new" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                         Ajouter un Client
                     </NavLink>
                 </Authorized>
@@ -94,7 +94,7 @@
                     <span class="nav-user-name">
                         @context.User.Identity?.Name (@Capitalize(context.User.FindFirst(ClaimTypes.Role)?.Value))
                     </span>
-                    <NavLink href="/mon-compte" class="nav-link">Mon Compte</NavLink>
+                    <NavLink href="/mon-compte" class="nav-link" target="_blank">Mon Compte</NavLink>
                     @*
                         Plain form POST, not @onclick — same reason as
                         Login.razor: HttpContext.SignOutAsync needs a live,

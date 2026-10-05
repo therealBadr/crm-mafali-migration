@@ -374,7 +374,9 @@ else if (Client is not null)
                 </div>
                 <div class="pc-field">
                     <label>Heure Rappel :</label>
-                    <TimeInput Value="Client!.HeureRappel" ValueChanged="v => Client!.HeureRappel = v" Disabled="MajDisabled" />
+                    <TimeInput Value="Client!.HeureRappel" ValueChanged="v => Client!.HeureRappel = v" Disabled="MajDisabled"
+                               EnableTzFeature="true" HomeTimezone="@CurrentPaysTimezone" HomeLabel="@Client.Pays" PairedDate="Client.DateRappel"
+                               CompareTimezone="@MarocTimezone" CompareLabel="Maroc" />
                 </div>
             </div>
             <label class="checkbox-label">
@@ -604,7 +606,9 @@ else if (Client is not null)
             <label>Saisir la date de Rappel :</label>
             <DateInput Value="DatePromptValue" ValueChanged="v => DatePromptValue = v ?? DatePromptValue" />
             <label>Saisir l'heure de Rappel :</label>
-            <TimeInput Value="TimePromptValue" ValueChanged="v => TimePromptValue = v ?? TimePromptValue" />
+            <TimeInput Value="TimePromptValue" ValueChanged="v => TimePromptValue = v ?? TimePromptValue"
+                       EnableTzFeature="true" HomeTimezone="@CurrentPaysTimezone" HomeLabel="@Client?.Pays" PairedDate="DatePromptValue"
+                       CompareTimezone="@MarocTimezone" CompareLabel="Maroc" />
             <div class="modal-actions">
                 <button class="btn btn-default" @onclick="() => DatePromptOpen = false">Annuler</button>
                 <button class="btn btn-primary" @onclick="ConfirmDatePrompt">Valider</button>
@@ -1009,6 +1013,13 @@ else if (Client is not null)
 
     private string? CurrentMask => Client?.Pays is not null && PaysByName.TryGetValue(Client.Pays, out var p) ? p.Masque : null;
     private string? CurrentIndicatif => Client?.Pays is not null && PaysByName.TryGetValue(Client.Pays, out var p) ? p.Indicatif : null;
+
+    // Heure Rappel's "view as" timezone toggle: HomeTimezone comes from the
+    // client's own Pays row, CompareTimezone is always Maroc's (where the
+    // assistants are) — see TimeInput.razor for why both plus PairedDate are
+    // required before the toggle appears at all.
+    private string? CurrentPaysTimezone => Client?.Pays is not null && PaysByName.TryGetValue(Client.Pays, out var p) ? p.FuseauHoraire : null;
+    private string? MarocTimezone => PaysByName.TryGetValue("Maroc", out var mp) ? mp.FuseauHoraire : null;
 
     private string ReturnUrl => Mode switch
     {

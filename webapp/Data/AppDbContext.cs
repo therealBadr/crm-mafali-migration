@@ -380,6 +380,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.NomPays)
                 .HasMaxLength(50)
                 .HasColumnName("nom_pays");
+            entity.Property(e => e.FuseauHoraire)
+                .HasMaxLength(50)
+                .HasColumnName("fuseau_horaire");
         });
 
         modelBuilder.Entity<TypeFamille>(entity =>

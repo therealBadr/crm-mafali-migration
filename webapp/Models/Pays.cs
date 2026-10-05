@@ -13,5 +13,7 @@ public partial class Pays
 
     public string? Masque { get; set; }
 
+    public string? FuseauHoraire { get; set; }
+
     public virtual ICollection<FranceOptique> FranceOptiques { get; set; } = new List<FranceOptique>();
 }
