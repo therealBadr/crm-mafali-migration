@@ -1,0 +1,7 @@
+/* Same green pairing as the global .badge-success, applied to .alert's
+   shape (padding/margin/radius already come from app.css) for the
+   post-submit confirmation banner. */
+.alert-success {
+    background: #e2f0d9;
+    color: #2f5518;
+}

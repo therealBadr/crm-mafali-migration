@@ -74,6 +74,23 @@
             <NavLink href="/bon-commande" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                 Bon de Commande
             </NavLink>
+            @* New-client workflow (2026-10-05): Commercial lost direct
+               /clients/new access in the 2026-09-04 permissions pass. This
+               restores adding — a real add, written straight to
+               france_optique — on a Commercial-only page rather than by
+               widening /clients/new's gate, since that route doubles as
+               /clients/{id}/edit and would hand Commercial edit access to
+               every client. Admin/Assistant validate afterward. *@
+            <AuthorizeView Roles="commercial">
+                <Authorized>
+                    <NavLink href="/ajouter-client" class="nav-link" ActiveClass="nav-link-active" target="_blank">
+                        Ajouter un Client
+                    </NavLink>
+                    <NavLink href="/mes-clients-ajoutes" class="nav-link" ActiveClass="nav-link-active" target="_blank">
+                        Mes Clients Ajoutés
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
             @* Was a "Nouveau" button on Parcours Client itself — moved here
                (2026-09-22, Badr) since it just navigates to /clients/new
                regardless of which client happens to be loaded on that page.
@@ -84,6 +101,17 @@
                 <Authorized>
                     <NavLink href="/clients/new" class="nav-link" ActiveClass="nav-link-active" target="_blank">
                         Ajouter un Client
+                    </NavLink>
+                </Authorized>
+            </AuthorizeView>
+            @* Validation queue for the workflow above — Admin included
+               despite the original request naming only Assistant,
+               consistent with Admin's existing full-access-everywhere
+               pattern (2026-10-05 decision). *@
+            <AuthorizeView Roles="admin,assistant">
+                <Authorized>
+                    <NavLink href="/clients-a-valider" class="nav-link" ActiveClass="nav-link-active" target="_blank">
+                        Clients à valider
                     </NavLink>
                 </Authorized>
             </AuthorizeView>

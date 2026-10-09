@@ -345,6 +345,16 @@
                                 {
                                     <span class="badge @badgeClass">@c.StatutsClients</span>
                                 }
+                                @* Same "pending only" rule as Clients.razor —
+                                   see its comment. Refused rows never reach
+                                   this grid (global query filter). *@
+                                else if (col.Key == "validation_status")
+                                {
+                                    @if (c.ValidationStatus == "pending")
+                                    {
+                                        <span class="badge badge-info">Non validé</span>
+                                    }
+                                }
                                 else
                                 {
                                     @GetCellText(c, col.Key)
@@ -483,6 +493,7 @@
         new("heure_rappel", "Heure Rappel", 90),
         new("note", "Note", 200),
         new("statuts_clients", "Statut Client", 140),
+        new("validation_status", "Validation", 110),
     };
 
     private int TotalWidth => Columns.Sum(c => c.Width);
@@ -935,6 +946,7 @@
         "heure_rappel" => c.HeureRappel?.ToString("HH:mm") ?? "",
         "note" => c.Note ?? "",
         "statuts_clients" => c.StatutsClients is "-1" or null ? "" : c.StatutsClients,
+        "validation_status" => c.ValidationStatus == "pending" ? "Non validé" : "",
         _ => "",
     };
 

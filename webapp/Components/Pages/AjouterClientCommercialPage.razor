@@ -1,0 +1,217 @@
+@page "/ajouter-client"
+@attribute [Authorize(Roles = "commercial")]
+@inject ClientService ClientSvc
+@inject PaysService PaysSvc
+@inject FamilleService FamilleSvc
+@inject FranchiseService FranchiseSvc
+@inject AssistanteService AssistanteSvc
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+@* Commercial's own add screen, deliberately separate from ClientForm.razor
+   rather than widening that page's role gate: ClientForm serves both
+   /clients/new and /clients/{id}/edit, so letting Commercial in there would
+   hand them edit access to all 93k clients, not just the ability to add.
+   Same field set, create-only. *@
+
+<PageTitle>Ajouter un Client</PageTitle>
+
+<div class="form-page">
+    <h2 class="form-page-title">Mafali CRM</h2>
+    <h3 class="form-page-subtitle">Ajouter un Client</h3>
+
+    @if (Loading)
+    {
+        <p class="dimmed">Chargement…</p>
+    }
+    else if (Submitted)
+    {
+        <div class="alert alert-success">
+            Client ajouté (N° @CreatedCleOpl). Il est déjà enregistré dans le CRM ; une assistante le validera.
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-default" @onclick="ViewMyClients">Voir mes clients ajoutés</button>
+            <button class="btn btn-primary" @onclick="AddAnother">Ajouter un autre client</button>
+        </div>
+    }
+    else
+    {
+        <div class="form-grid">
+            <label for="f-raison">Raison Sociale *</label>
+            <input id="f-raison" class="text-input" maxlength="60" value="@Input.RaisonSociale"
+                   @oninput="e => Input.RaisonSociale = e.Value?.ToString() ?? string.Empty" />
+
+            <label for="f-complement">Complement</label>
+            <input id="f-complement" class="text-input" maxlength="60" value="@Input.Complement"
+                   @oninput="e => Input.Complement = e.Value?.ToString()" />
+
+            <label for="f-famille">Famille</label>
+            <select id="f-famille" class="text-input" value="@Input.Famille" @onchange="e => Input.Famille = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FamilleOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
+
+            <label for="f-franchise">Franchise</label>
+            <select id="f-franchise" class="text-input" value="@Input.Franchise" @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FranchiseOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
+
+            <label for="f-rue">Rue</label>
+            <input id="f-rue" class="text-input" maxlength="60" value="@Input.Rue"
+                   @oninput="e => Input.Rue = e.Value?.ToString()" />
+
+            <label for="f-loc1">Localisation 1</label>
+            <input id="f-loc1" class="text-input" maxlength="60" value="@Input.Localisation1"
+                   @oninput="e => Input.Localisation1 = e.Value?.ToString()" />
+
+            <label for="f-loc2">Localisation 2</label>
+            <input id="f-loc2" class="text-input" maxlength="60" value="@Input.Localisation2"
+                   @oninput="e => Input.Localisation2 = e.Value?.ToString()" />
+
+            <label for="f-cp">Code Postal</label>
+            <input id="f-cp" class="text-input" maxlength="5" value="@Input.Cp"
+                   @oninput="e => Input.Cp = e.Value?.ToString()" />
+
+            <label for="f-ville">Ville</label>
+            <input id="f-ville" class="text-input" maxlength="40" value="@Input.Ville"
+                   @oninput="e => Input.Ville = e.Value?.ToString()" />
+
+            <label for="f-pays">Pays</label>
+            <select id="f-pays" class="text-input" value="@Input.Pays" @onchange="e => Input.Pays = e.Value?.ToString()">
+                <option value="">—</option>
+                @foreach (var p in PaysOptions)
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+
+            <label for="f-tel">Telephone</label>
+            <input id="f-tel" class="text-input" maxlength="20" value="@Input.Telephone"
+                   @oninput="e => Input.Telephone = e.Value?.ToString()" />
+
+            <label for="f-portable">Portable</label>
+            <input id="f-portable" class="text-input" maxlength="20" value="@Input.Portable"
+                   @oninput="e => Input.Portable = e.Value?.ToString()" />
+
+            <label for="f-email">Email</label>
+            <input id="f-email" class="text-input" type="email" maxlength="50" value="@Input.Email"
+                   @oninput="e => Input.Email = e.Value?.ToString()" />
+
+            <label for="f-assistante">Assistante Commerciale</label>
+            <select id="f-assistante" class="text-input" value="@Input.AssistanteCommercial" @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var a in AssistanteOptions)
+                {
+                    <option value="@a">@a</option>
+                }
+            </select>
+
+            <label for="f-resp">Responsable Achat</label>
+            <input id="f-resp" class="text-input" maxlength="50" value="@Input.ResponsableAchat"
+                   @oninput="e => Input.ResponsableAchat = e.Value?.ToString()" />
+
+            <label for="f-repr">Représentant</label>
+            <input id="f-repr" class="text-input" maxlength="100" value="@Input.Representant"
+                   @oninput="e => Input.Representant = e.Value?.ToString()" />
+
+            <label for="f-etat">Etat Client</label>
+            <select id="f-etat" class="text-input" value="@(Input.EtatClient == "1" ? "1" : "2")"
+                    @onchange="e => Input.EtatClient = e.Value?.ToString()">
+                <option value="1">Client</option>
+                <option value="2">Prospect</option>
+            </select>
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert">@Error</div>
+        }
+
+        <div class="modal-actions">
+            <button class="btn btn-primary" disabled="@Submitting" @onclick="Submit">Enregistrer</button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool Loading = true;
+    private bool Submitting;
+    private bool Submitted;
+    private long CreatedCleOpl;
+    private string? Error;
+    // Same reasoning as ClientForm.razor's own Input default: a brand-new
+    // client has no prior legacy value to preserve, so it starts as
+    // Prospect rather than inheriting whatever "0" means for an existing row.
+    private ClientInput Input = new() { EtatClient = "2" };
+    private List<string> PaysOptions = new();
+    private List<string> FamilleOptions = new();
+    private List<string> FranchiseOptions = new();
+    private List<string> AssistanteOptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loading = true;
+        try
+        {
+            PaysOptions = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
+            FamilleOptions = await FamilleSvc.ListAsync();
+            FranchiseOptions = await FranchiseSvc.ListAsync();
+            AssistanteOptions = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void AddAnother()
+    {
+        Input = new() { EtatClient = "2" };
+        Submitted = false;
+        Error = null;
+    }
+
+    private void ViewMyClients() => Nav.NavigateTo("/mes-clients-ajoutes");
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Input.RaisonSociale))
+        {
+            Error = "Raison Sociale est requis.";
+            return;
+        }
+
+        Submitting = true;
+        Error = null;
+        try
+        {
+            var login = await CurrentUser.GetLoginAsync()
+                ?? throw new InvalidOperationException("Session invalide, veuillez vous reconnecter.");
+            // addedBy/"pending" passed explicitly — this is the one create
+            // path that needs validating. ClientForm.razor's admin/assistant
+            // path takes CreateAsync's defaults and is validated on insert.
+            var created = await ClientSvc.CreateAsync(Input, addedBy: login, validationStatus: "pending");
+            CreatedCleOpl = created.CleOpl;
+            Submitted = true;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+}

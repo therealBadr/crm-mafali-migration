@@ -1,0 +1,153 @@
+@page "/clients-a-valider"
+@attribute [Authorize(Roles = "admin,assistant")]
+@inject ClientValidationService ValidationSvc
+@inject NavigationManager Nav
+
+@* Validation queue for clients added by a Commercial (2026-10-05 design).
+   These are already real france_optique rows, live and usable — this screen
+   is a quality check after the fact, not a gate before insertion. *@
+
+<PageTitle>Clients à valider</PageTitle>
+
+<div class="page page-flush">
+<div class="toolbar">
+    <span class="title">Clients à valider</span>
+    <div class="actions">
+        <button class="btn btn-outline" @onclick="Load">Actualiser</button>
+    </div>
+</div>
+
+<div class="search-bar">
+    <label for="f-adder" style="font-size: 12px; color: #667;">Ajouté par :</label>
+    <select id="f-adder" class="search-input" style="min-width: 220px;" value="@SelectedAdder" @onchange="OnAdderChange">
+        <option value="">Tous les commerciaux (@TotalPending)</option>
+        @foreach (var (adder, count) in Adders)
+        {
+            <option value="@adder">@adder (@count)</option>
+        }
+    </select>
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else if (Items.Count == 0)
+{
+    <p class="dimmed">
+        @(string.IsNullOrEmpty(SelectedAdder)
+            ? "Aucun client en attente de validation."
+            : $"Aucun client en attente de validation pour {SelectedAdder}.")
+    </p>
+}
+else
+{
+    <div class="table-wrap" style="overflow-x: auto;">
+        <div style="@GridLayout.WrapperStyle(TotalWidth)">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in Columns)
+                {
+                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
+                        @col.Label
+                    </div>
+                }
+            </div>
+            @foreach (var c in Items)
+            {
+                <div class="row" @onclick="() => OpenReview(c.CleOpl)">
+                    @foreach (var col in Columns)
+                    {
+                        <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
+                            @GetCellText(c, col.Key)
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    <p class="count">@Items.Count client@(Items.Count != 1 ? "s" : "") en attente de validation</p>
+}
+</div>
+
+@code {
+    private record ColumnDef(string Key, string Label, int Width);
+
+    private readonly List<ColumnDef> Columns = new()
+    {
+        new("cle_opl", "N° Client", 90),
+        new("date_saisie", "Ajouté le", 110),
+        new("raison_sociale", "Raison Sociale", 220),
+        new("famille", "Famille", 140),
+        new("franchise", "Franchise", 160),
+        new("ville", "Ville", 140),
+        new("pays", "Pays", 110),
+        new("added_by", "Ajouté par", 160),
+    };
+
+    private int TotalWidth => Columns.Sum(c => c.Width);
+
+    private List<FranceOptique> Items = new();
+    private List<(string AddedBy, int Count)> Adders = new();
+    private string SelectedAdder = string.Empty;
+    private int TotalPending;
+    private bool Loading = true;
+    private string? Error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Loading = true;
+        try
+        {
+            // Adders/TotalPending are always the unfiltered picture — the
+            // dropdown has to keep showing every Commercial with pending
+            // work even while narrowed to one of them, otherwise selecting
+            // someone would erase the way back to the others.
+            Adders = await ValidationSvc.ListPendingAddersAsync();
+            TotalPending = await ValidationSvc.CountPendingAsync();
+            Items = await ValidationSvc.ListPendingAsync(
+                string.IsNullOrEmpty(SelectedAdder) ? null : SelectedAdder);
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private async Task OnAdderChange(ChangeEventArgs e)
+    {
+        SelectedAdder = e.Value?.ToString() ?? string.Empty;
+        await Load();
+    }
+
+    // Carries the current filter into the review page so its "Retour" can
+    // land back on the same narrowed list instead of resetting to all.
+    private void OpenReview(long cleOpl) => Nav.NavigateTo(
+        string.IsNullOrEmpty(SelectedAdder)
+            ? $"/clients-a-valider/{cleOpl}"
+            : $"/clients-a-valider/{cleOpl}?adder={Uri.EscapeDataString(SelectedAdder)}");
+
+    private static string GetCellText(FranceOptique c, string key) => key switch
+    {
+        "cle_opl" => c.CleOpl.ToString(),
+        "date_saisie" => c.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "raison_sociale" => c.RaisonSociale ?? "",
+        "famille" => c.Famille ?? "",
+        "franchise" => c.Franchise ?? "",
+        "ville" => c.Ville ?? "",
+        "pays" => c.Pays ?? "",
+        "added_by" => c.AddedBy ?? "",
+        _ => "",
+    };
+}

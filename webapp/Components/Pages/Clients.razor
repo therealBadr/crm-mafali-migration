@@ -75,6 +75,19 @@ else
                             {
                                 <span class="badge @badgeClass">@c.StatutsClients</span>
                             }
+                            @* Badge only for 'pending' — the other 93,000+ rows
+                               are 'validated', and a green badge on every one
+                               of them would be pure noise. The column reads as
+                               "needs attention", blank meaning nothing to do.
+                               'refused' can't appear here at all: the global
+                               query filter in AppDbContext hides it. *@
+                            else if (col.Key == "validation_status")
+                            {
+                                @if (c.ValidationStatus == "pending")
+                                {
+                                    <span class="badge badge-info">Non validé</span>
+                                }
+                            }
                             else
                             {
                                 @GetCellText(c, col.Key)
@@ -185,6 +198,7 @@ else
         new("heure_rappel", "Heure Rappel", 90),
         new("note_perm", "Note Permanente", 200),
         new("etat_client", "État Client", 140),
+        new("validation_status", "Validation", 110),
     };
 
     private int TotalWidth => Columns.Sum(c => c.Width);
@@ -506,6 +520,10 @@ else
         // literally "1" reads as Prospect, including legacy junk ("0"/
         // blank/"-1"/typos) that was never explicitly set to Client.
         "etat_client" => c.EtatClient == "1" ? "Client" : "Prospect",
+        // GridFilter/GridSort match on this text, so it has to equal what the
+        // badge renders — per GridFilter.Apply's contract (a mismatch here is
+        // exactly the class of bug fixed in the Assistantes "Oui"/"Non" case).
+        "validation_status" => c.ValidationStatus == "pending" ? "Non validé" : "",
         _ => "",
     };
 

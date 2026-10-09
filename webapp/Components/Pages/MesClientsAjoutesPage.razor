@@ -1,0 +1,138 @@
+@page "/mes-clients-ajoutes"
+@attribute [Authorize(Roles = "commercial")]
+@inject ClientValidationService ValidationSvc
+@inject CurrentUserService CurrentUser
+
+@* A Commercial's own additions and what happened to them. This is the one
+   screen that deliberately still shows 'refused' clients — everywhere else
+   they're hidden, but the person who added one needs to see that it was
+   refused and why, otherwise the record would just silently vanish on them. *@
+
+<PageTitle>Mes Clients Ajoutés</PageTitle>
+
+<div class="page page-flush">
+<div class="toolbar">
+    <span class="title">Mes Clients Ajoutés</span>
+    <div class="actions">
+        <button class="btn btn-outline" @onclick="Load">Actualiser</button>
+    </div>
+</div>
+
+@if (Error is not null)
+{
+    <div class="alert">@Error</div>
+}
+
+@if (Loading)
+{
+    <p class="dimmed">Chargement…</p>
+}
+else if (Items.Count == 0)
+{
+    <p class="dimmed">Vous n'avez ajouté aucun client.</p>
+}
+else
+{
+    <div class="table-wrap" style="overflow-x: auto;">
+        <div style="@GridLayout.WrapperStyle(TotalWidth)">
+            <div class="header-row" style="position: sticky; top: 0;">
+                @foreach (var col in Columns)
+                {
+                    <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
+                        @col.Label
+                    </div>
+                }
+            </div>
+            @foreach (var c in Items)
+            {
+                <div class="row">
+                    @foreach (var col in Columns)
+                    {
+                        <div class="cell" style="@GridLayout.ColStyle(col.Width, col == Columns[^1])">
+                            @if (col.Key == "validation_status")
+                            {
+                                <span class="badge @StatusBadgeClass(c.ValidationStatus)">@StatusLabel(c.ValidationStatus)</span>
+                            }
+                            else
+                            {
+                                @GetCellText(c, col.Key)
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    <p class="count">@Items.Count client@(Items.Count != 1 ? "s" : "") ajouté@(Items.Count != 1 ? "s" : "")</p>
+}
+</div>
+
+@code {
+    private record ColumnDef(string Key, string Label, int Width);
+
+    private readonly List<ColumnDef> Columns = new()
+    {
+        new("cle_opl", "N° Client", 90),
+        new("date_saisie", "Ajouté le", 110),
+        new("raison_sociale", "Raison Sociale", 220),
+        new("ville", "Ville", 140),
+        new("pays", "Pays", 110),
+        new("validation_status", "Validation", 120),
+        new("validated_at", "Traité le", 130),
+        new("refusal_reason", "Motif (si refusé)", 240),
+    };
+
+    private int TotalWidth => Columns.Sum(c => c.Width);
+
+    private List<FranceOptique> Items = new();
+    private bool Loading = true;
+    private string? Error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        Loading = true;
+        try
+        {
+            var login = await CurrentUser.GetLoginAsync();
+            Items = login is null ? new() : await ValidationSvc.ListByAdderAsync(login);
+            Error = null;
+        }
+        catch (Exception ex)
+        {
+            Error = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "validated" => "Validé",
+        "refused" => "Refusé",
+        _ => "En attente",
+    };
+
+    // Same badge classes Clients.razor's Statuts Clients column already uses.
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        "validated" => "badge-success",
+        "refused" => "badge-danger",
+        _ => "badge-info",
+    };
+
+    private static string GetCellText(FranceOptique c, string key) => key switch
+    {
+        "cle_opl" => c.CleOpl.ToString(),
+        "date_saisie" => c.DateSaisie?.ToString("dd/MM/yyyy") ?? "",
+        "raison_sociale" => c.RaisonSociale ?? "",
+        "ville" => c.Ville ?? "",
+        "pays" => c.Pays ?? "",
+        "validated_at" => c.ValidatedAt?.ToString("dd/MM/yyyy HH:mm") ?? "",
+        "refusal_reason" => c.RefusalReason ?? "",
+        _ => "",
+    };
+}

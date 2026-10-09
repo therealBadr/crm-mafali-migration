@@ -6,6 +6,7 @@ using MafaliCrm.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -107,6 +108,7 @@ builder.Services.AddScoped<FranchiseService>();
 builder.Services.AddScoped<PaysService>();
 builder.Services.AddScoped<AssistanteService>();
 builder.Services.AddScoped<ClientService>();
+builder.Services.AddScoped<ClientValidationService>();
 builder.Services.AddScoped<ClientFilterService>();
 builder.Services.AddScoped<FiltreOperatriceService>();
 builder.Services.AddScoped<HistoriqueService>();
@@ -117,6 +119,22 @@ builder.Services.AddScoped<ClientImportExportService>();
 builder.Services.AddScoped<RappelService>();
 builder.Services.AddScoped<BonCommandeTemplateService>();
 builder.Services.AddScoped<BonCommandeEnCoursService>();
+
+// Rappel pop-ups, step 2 (Badr, 2026-10-08). The pairing here is the whole
+// point, so the two lifetimes are deliberate rather than incidental:
+//
+//   * the registry is a Singleton — one shared table of who is connected,
+//     reachable both from a user's circuit and from the background scanner
+//     thread that has no circuit at all;
+//   * the handler is Scoped — the framework creates one per circuit and
+//     calls its lifecycle methods, which is how each circuit reports itself
+//     into that shared table.
+//
+// Registered against the CircuitHandler base type, not the concrete class:
+// that's the type Blazor resolves when it looks for circuit observers, and
+// registering the concrete type alone would silently never be called.
+builder.Services.AddSingleton<ConnectedUserRegistry>();
+builder.Services.AddScoped<CircuitHandler, ConnectedUserCircuitHandler>();
 
 var app = builder.Build();
 

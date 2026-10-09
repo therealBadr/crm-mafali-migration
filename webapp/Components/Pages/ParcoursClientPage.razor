@@ -151,6 +151,15 @@ else if (Client is not null)
             {
                 <span class="badge badge-gray">Enregistrement bloqué</span>
             }
+            @* Flags a client added by a Commercial that no Assistant has
+               checked yet, so anyone working the record knows its data hasn't
+               been reviewed. Only 'pending' shows — 'validated' is the normal
+               state for all migrated clients, and 'refused' is hidden from
+               this page entirely by the global query filter. *@
+            @if (Client.ValidationStatus == "pending")
+            {
+                <span class="badge badge-info">Non validé</span>
+            }
         </div>
     </div>
 

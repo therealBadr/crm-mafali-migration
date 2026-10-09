@@ -65,6 +65,7 @@ public class ClientInput
         AssistanteCommercial = c.AssistanteCommercial,
         EtatClient = c.EtatClient,
     };
+
 }
 
 // Fen_Parcours_Client's own field scope — much wider than Detail_Client's
@@ -207,7 +208,20 @@ public class ClientService
     // won't assign it for us. Same as the old backend's raw
     // `SELECT nextval(...)`, just via EF Core's typed raw-SQL scalar query
     // instead of Prisma's $queryRaw.
-    public async Task<FranceOptique> CreateAsync(ClientInput input)
+    // addedBy/validationStatus default to "nobody in particular, already
+    // validated" so ClientForm.razor's existing admin/assistant call site
+    // keeps its current behavior untouched: the 2026-10-05 workflow is
+    // specifically about validating what a *Commercial* adds, so an
+    // admin/assistant creating a client must not land in their own
+    // validation queue. The Commercial path passes both explicitly.
+    // Note the DB column itself defaults to 'pending' (the safer direction
+    // to fail in — an unset status means "needs checking", never
+    // "silently trusted"); this parameter default only applies to callers
+    // that have already established the creator is trusted.
+    public async Task<FranceOptique> CreateAsync(
+        ClientInput input,
+        string? addedBy = null,
+        string validationStatus = "validated")
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
 
@@ -215,8 +229,24 @@ public class ClientService
             .SqlQuery<long>($"SELECT nextval('france_optique_cle_opl_seq')")
             .ToListAsync())[0];
 
-        var entity = new FranceOptique { CleOpl = cleOpl };
-        ApplyInput(entity, input);
+        // date_saisie/heure_saisie are stamped here because ClientInput has no
+        // field for them and nothing else on the create path sets them — every
+        // client created through /clients/new until now got a NULL entry date,
+        // which Parcours Client and the grids display as blank. Fixed at the
+        // source rather than only on the Commercial path: date_saisie means
+        // "date de saisie", and a row being inserted right now unambiguously
+        // has one. ParcoursClientInput still carries its own
+        // DateSaisie/HeureSaisie for editing an existing client, untouched.
+        var now = DateTime.Now;
+        var entity = new FranceOptique
+        {
+            CleOpl = cleOpl,
+            AddedBy = addedBy,
+            ValidationStatus = validationStatus,
+            DateSaisie = DateOnly.FromDateTime(now),
+            HeureSaisie = TimeOnly.FromDateTime(now),
+        };
+        ApplyInputTo(entity, input);
         db.FranceOptiques.Add(entity);
 
         try
@@ -236,7 +266,7 @@ public class ClientService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var entity = await db.FranceOptiques.FindAsync(cleOpl)
             ?? throw new InvalidOperationException("Client introuvable.");
-        ApplyInput(entity, input);
+        ApplyInputTo(entity, input);
 
         try
         {
@@ -288,7 +318,7 @@ public class ClientService
             return new ApplyResult { Success = false, Conflicts = conflicts };
         }
 
-        ApplyInput(entity, merged);
+        ApplyInputTo(entity, merged);
 
         try
         {
@@ -516,7 +546,11 @@ public class ClientService
         }
     }
 
-    private static void ApplyInput(FranceOptique entity, ClientInput input)
+    // internal, not private: ClientValidationService.ValidateAsync applies a
+    // reviewer's corrections to an existing client and must write exactly the
+    // same field set this does — duplicating the list there would be a second
+    // place to forget a column.
+    internal static void ApplyInputTo(FranceOptique entity, ClientInput input)
     {
         entity.RaisonSociale = input.RaisonSociale;
         entity.Complement = input.Complement;

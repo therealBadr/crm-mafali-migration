@@ -1,0 +1,313 @@
+@page "/clients-a-valider/{CleOpl:long}"
+@attribute [Authorize(Roles = "admin,assistant")]
+@inject ClientValidationService ValidationSvc
+@inject PaysService PaysSvc
+@inject FamilleService FamilleSvc
+@inject FranchiseService FranchiseSvc
+@inject AssistanteService AssistanteSvc
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+<PageTitle>Valider un Client</PageTitle>
+
+<div class="form-page">
+    <h2 class="form-page-title">Mafali CRM</h2>
+    <h3 class="form-page-subtitle">Valider un Client</h3>
+
+    @if (Loading)
+    {
+        <p class="dimmed">Chargement…</p>
+    }
+    else if (NotFound || Entity is null)
+    {
+        <div class="alert">@(SubmitError ?? "Client introuvable.")</div>
+        <div class="modal-actions">
+            <button class="btn btn-default" @onclick="BackToList">Retour</button>
+        </div>
+    }
+    else
+    {
+        <p class="dimmed">
+            Client N° @Entity!.CleOpl ·
+            @if (Entity.AddedBy is not null)
+            {
+                <text>ajouté par @Entity.AddedBy</text>
+            }
+            else
+            {
+                <text>origine inconnue (donnée migrée)</text>
+            }
+            @if (Entity.DateSaisie is not null)
+            {
+                <text> le @Entity.DateSaisie.Value.ToString("dd/MM/yyyy")@(Entity.HeureSaisie is not null ? Entity.HeureSaisie.Value.ToString(" HH:mm") : "")</text>
+            }
+        </p>
+
+        @if (Entity.ValidationStatus != "pending")
+        {
+            <div class="alert">
+                Déjà traité — @(Entity.ValidationStatus == "validated" ? "validé" : "refusé")
+                par @Entity.ValidatedBy le @Entity.ValidatedAt?.ToString("dd/MM/yyyy HH:mm").
+                @if (Entity.ValidationStatus == "refused" && !string.IsNullOrWhiteSpace(Entity.RefusalReason))
+                {
+                    <text> Motif : @Entity.RefusalReason</text>
+                }
+            </div>
+        }
+
+        <div class="form-grid">
+            <label for="f-raison">Raison Sociale *</label>
+            <input id="f-raison" class="text-input" maxlength="60" value="@Input.RaisonSociale" disabled="@ReadOnly"
+                   @oninput="e => Input.RaisonSociale = e.Value?.ToString() ?? string.Empty" />
+
+            <label for="f-complement">Complement</label>
+            <input id="f-complement" class="text-input" maxlength="60" value="@Input.Complement" disabled="@ReadOnly"
+                   @oninput="e => Input.Complement = e.Value?.ToString()" />
+
+            <label for="f-famille">Famille</label>
+            <select id="f-famille" class="text-input" value="@Input.Famille" disabled="@ReadOnly" @onchange="e => Input.Famille = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FamilleOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
+
+            <label for="f-franchise">Franchise</label>
+            <select id="f-franchise" class="text-input" value="@Input.Franchise" disabled="@ReadOnly" @onchange="e => Input.Franchise = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var f in FranchiseOptions)
+                {
+                    <option value="@f">@f</option>
+                }
+            </select>
+
+            <label for="f-rue">Rue</label>
+            <input id="f-rue" class="text-input" maxlength="60" value="@Input.Rue" disabled="@ReadOnly"
+                   @oninput="e => Input.Rue = e.Value?.ToString()" />
+
+            <label for="f-loc1">Localisation 1</label>
+            <input id="f-loc1" class="text-input" maxlength="60" value="@Input.Localisation1" disabled="@ReadOnly"
+                   @oninput="e => Input.Localisation1 = e.Value?.ToString()" />
+
+            <label for="f-loc2">Localisation 2</label>
+            <input id="f-loc2" class="text-input" maxlength="60" value="@Input.Localisation2" disabled="@ReadOnly"
+                   @oninput="e => Input.Localisation2 = e.Value?.ToString()" />
+
+            <label for="f-cp">Code Postal</label>
+            <input id="f-cp" class="text-input" maxlength="5" value="@Input.Cp" disabled="@ReadOnly"
+                   @oninput="e => Input.Cp = e.Value?.ToString()" />
+
+            <label for="f-ville">Ville</label>
+            <input id="f-ville" class="text-input" maxlength="40" value="@Input.Ville" disabled="@ReadOnly"
+                   @oninput="e => Input.Ville = e.Value?.ToString()" />
+
+            <label for="f-pays">Pays</label>
+            <select id="f-pays" class="text-input" value="@Input.Pays" disabled="@ReadOnly" @onchange="e => Input.Pays = e.Value?.ToString()">
+                <option value="">—</option>
+                @foreach (var p in PaysOptions)
+                {
+                    <option value="@p">@p</option>
+                }
+            </select>
+
+            <label for="f-tel">Telephone</label>
+            <input id="f-tel" class="text-input" maxlength="20" value="@Input.Telephone" disabled="@ReadOnly"
+                   @oninput="e => Input.Telephone = e.Value?.ToString()" />
+
+            <label for="f-portable">Portable</label>
+            <input id="f-portable" class="text-input" maxlength="20" value="@Input.Portable" disabled="@ReadOnly"
+                   @oninput="e => Input.Portable = e.Value?.ToString()" />
+
+            <label for="f-email">Email</label>
+            <input id="f-email" class="text-input" type="email" maxlength="50" value="@Input.Email" disabled="@ReadOnly"
+                   @oninput="e => Input.Email = e.Value?.ToString()" />
+
+            <label for="f-assistante">Assistante Commerciale</label>
+            <select id="f-assistante" class="text-input" value="@Input.AssistanteCommercial" disabled="@ReadOnly" @onchange="e => Input.AssistanteCommercial = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value.ToString()">
+                <option value="">—</option>
+                @foreach (var a in AssistanteOptions)
+                {
+                    <option value="@a">@a</option>
+                }
+            </select>
+
+            <label for="f-resp">Responsable Achat</label>
+            <input id="f-resp" class="text-input" maxlength="50" value="@Input.ResponsableAchat" disabled="@ReadOnly"
+                   @oninput="e => Input.ResponsableAchat = e.Value?.ToString()" />
+
+            <label for="f-repr">Représentant</label>
+            <input id="f-repr" class="text-input" maxlength="100" value="@Input.Representant" disabled="@ReadOnly"
+                   @oninput="e => Input.Representant = e.Value?.ToString()" />
+
+            <label for="f-etat">Etat Client</label>
+            <select id="f-etat" class="text-input" value="@(Input.EtatClient == "1" ? "1" : "2")" disabled="@ReadOnly"
+                    @onchange="e => Input.EtatClient = e.Value?.ToString()">
+                <option value="1">Client</option>
+                <option value="2">Prospect</option>
+            </select>
+        </div>
+
+        @if (SubmitError is not null)
+        {
+            <div class="alert">@SubmitError</div>
+        }
+
+        <div class="modal-actions">
+            <button class="btn btn-default" @onclick="BackToList">Retour</button>
+            @if (!ReadOnly)
+            {
+                <button class="btn btn-outline" disabled="@Submitting" @onclick="OpenRefuseConfirm">Refuser</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="Validate">Valider</button>
+            }
+        </div>
+    }
+</div>
+
+@if (RefuseConfirmOpen)
+{
+    <div class="modal-backdrop" @onclick="() => RefuseConfirmOpen = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Refuser ce client</h3>
+            @* Spelling out the consequence because, unlike the retired
+               proposal workflow, this client already exists in the CRM —
+               "refuser" hides an existing record rather than declining to
+               create one, and the reviewer should know that's what they're
+               doing. *@
+            <p class="confirm-text">
+                Ce client est déjà enregistré. Le refuser le masquera dans toutes les
+                vues du CRM, sans le supprimer — il restera consultable par le
+                commercial qui l'a ajouté, avec le motif ci-dessous.
+            </p>
+            <textarea class="text-input" rows="3" style="width:100%;" maxlength="250" value="@RefuseReason"
+                      @oninput="e => RefuseReason = e.Value?.ToString() ?? string.Empty"></textarea>
+            <div class="modal-actions">
+                <button class="btn btn-default" @onclick="() => RefuseConfirmOpen = false">Annuler</button>
+                <button class="btn btn-primary" disabled="@Submitting" @onclick="Refuse">Confirmer le refus</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public long CleOpl { get; set; }
+
+    // Preserves the queue's "Ajouté par" filter across the round trip, so
+    // Retour and post-action redirects land on the same narrowed list the
+    // reviewer was working through rather than resetting to all commercials.
+    [SupplyParameterFromQuery(Name = "adder")]
+    private string? Adder { get; set; }
+
+    private bool Loading = true;
+    private bool NotFound;
+    private bool Submitting;
+    private string? SubmitError;
+    private FranceOptique? Entity;
+    private ClientInput Input = new();
+    private List<string> PaysOptions = new();
+    private List<string> FamilleOptions = new();
+    private List<string> FranchiseOptions = new();
+    private List<string> AssistanteOptions = new();
+    private bool RefuseConfirmOpen;
+    private string RefuseReason = string.Empty;
+
+    // Already-decided clients render read-only — there's nothing left to
+    // validate or refuse, this is just the record of what happened. Note
+    // this also covers the 93,235 migrated clients, which are all
+    // 'validated': opening one of those by URL shows it read-only rather
+    // than offering to "validate" data nobody ever submitted for review.
+    private bool ReadOnly => Entity?.ValidationStatus != "pending";
+
+    private string ListUrl => string.IsNullOrEmpty(Adder)
+        ? "/clients-a-valider"
+        : $"/clients-a-valider?adder={Uri.EscapeDataString(Adder)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loading = true;
+        try
+        {
+            PaysOptions = (await PaysSvc.ListAsync()).Select(p => p.NomPays).ToList();
+            FamilleOptions = await FamilleSvc.ListAsync();
+            FranchiseOptions = await FranchiseSvc.ListAsync();
+            AssistanteOptions = (await AssistanteSvc.ListAsync()).Select(a => a.PrenomNom).ToList();
+
+            Entity = await ValidationSvc.GetIncludingRefusedAsync(CleOpl);
+            if (Entity is null)
+            {
+                NotFound = true;
+                return;
+            }
+            Input = ClientInput.FromEntity(Entity);
+        }
+        catch (Exception ex)
+        {
+            SubmitError = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private void BackToList() => Nav.NavigateTo(ListUrl);
+
+    private void OpenRefuseConfirm()
+    {
+        RefuseReason = string.Empty;
+        RefuseConfirmOpen = true;
+    }
+
+    private async Task Validate()
+    {
+        if (string.IsNullOrWhiteSpace(Input.RaisonSociale))
+        {
+            SubmitError = "Raison Sociale est requis.";
+            return;
+        }
+
+        Submitting = true;
+        SubmitError = null;
+        try
+        {
+            var login = await CurrentUser.GetLoginAsync()
+                ?? throw new InvalidOperationException("Session invalide, veuillez vous reconnecter.");
+            // Input carries the reviewer's corrections if they changed
+            // anything before clicking Valider — one codepath for both
+            // "validate as-is" and "correct then validate".
+            await ValidationSvc.ValidateAsync(CleOpl, Input, login);
+            Nav.NavigateTo(ListUrl);
+        }
+        catch (Exception ex)
+        {
+            SubmitError = FriendlyError.ToUserMessage(ex);
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+
+    private async Task Refuse()
+    {
+        Submitting = true;
+        SubmitError = null;
+        try
+        {
+            var login = await CurrentUser.GetLoginAsync()
+                ?? throw new InvalidOperationException("Session invalide, veuillez vous reconnecter.");
+            await ValidationSvc.RefuseAsync(CleOpl, login, RefuseReason);
+            RefuseConfirmOpen = false;
+            Nav.NavigateTo(ListUrl);
+        }
+        catch (Exception ex)
+        {
+            SubmitError = FriendlyError.ToUserMessage(ex);
+            RefuseConfirmOpen = false;
+        }
+        finally
+        {
+            Submitting = false;
+        }
+    }
+}
